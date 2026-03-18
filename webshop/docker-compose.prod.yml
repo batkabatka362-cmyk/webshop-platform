@@ -1,0 +1,87 @@
+# ═══════════════════════════════════════════════
+# WEBSHOP — docker-compose.prod.yml
+# Production override for docker-compose.yml
+# ═══════════════════════════════════════════════
+# Usage:
+#   docker-compose -f docker-compose.yml \
+#                  -f docker-compose.prod.yml up -d
+
+version: '3.9'
+
+services:
+
+  webshop-api:
+    build:
+      context: .
+      target:  runtime          # production runtime stage (not builder)
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+    volumes: []                 # no source mounts in production
+    deploy:
+      replicas:        2
+      update_config:
+        parallelism:   1
+        delay:         10s
+        failure_action: rollback
+      restart_policy:
+        condition:     on-failure
+        max_attempts:  3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  postgres:
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:-webshop_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB:       ${POSTGRES_DB:-webshop_db}
+    ports: []                   # not exposed externally in production
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  redis:
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    ports: []                   # not exposed externally in production
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  nginx:
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro    # TLS certificates
+      - uploads_data:/app/uploads:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # pgAdmin excluded in production (dev-tools profile only)
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  uploads_data:
+    driver: local

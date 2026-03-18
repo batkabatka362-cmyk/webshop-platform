@@ -1,0 +1,722 @@
+// ═══════════════════════════════════════════════
+// WEBSHOP — Prisma Schema
+// ═══════════════════════════════════════════════
+// Generator: @prisma/client
+// Database:  PostgreSQL 16
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_DIRECT_URL")
+}
+
+// ─────────────────────────────────────────────
+// CATALOG
+// ─────────────────────────────────────────────
+
+model Product {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  description String?
+  sku         String   @unique
+  basePrice   Float
+  currency    String   @default("MNT")
+  categoryId  String?
+  status      String   @default("draft")
+  attributes  Json?
+  deletedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category  Category?       @relation(fields: [categoryId], references: [id])
+  variants  ProductVariant[]
+  media     ProductMedia[]
+  inventory Inventory?
+
+  @@index([slug])
+  @@index([categoryId])
+  @@index([status])
+  @@map("products")
+}
+
+model ProductVariant {
+  id         String   @id @default(uuid())
+  productId  String
+  name       String
+  sku        String   @unique
+  price      Float
+  attributes Json?
+  stock      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model ProductMedia {
+  id        String   @id @default(uuid())
+  productId String
+  url       String
+  type      String   @default("image")
+  position  Int      @default(0)
+  altText   String?
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@map("product_media")
+}
+
+model Category {
+  id          String     @id @default(uuid())
+  slug        String     @unique
+  name        String
+  description String?
+  parentId    String?
+  position    Int        @default(0)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@index([slug])
+  @@index([parentId])
+  @@map("categories")
+}
+
+// ─────────────────────────────────────────────
+// INVENTORY
+// ─────────────────────────────────────────────
+
+model Inventory {
+  id                String   @id @default(uuid())
+  productId         String   @unique
+  variantId         String?
+  quantity          Int      @default(0)
+  reserved          Int      @default(0)
+  lowStockThreshold Int      @default(10)
+  reorderPoint      Int      @default(5)
+  allowBackorder    Boolean  @default(false)
+  warehouseLocation String?
+  status            String   @default("in_stock")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  product      Product              @relation(fields: [productId], references: [id])
+  reservations StockReservation[]
+  history      StockHistory[]
+
+  @@index([productId])
+  @@index([status])
+  @@map("inventory")
+}
+
+model StockReservation {
+  id            String   @id @default(uuid())
+  inventoryId   String
+  productId     String
+  variantId     String?
+  quantity      Int
+  type          String   @default("soft")
+  status        String   @default("active")
+  referenceId   String
+  referenceType String
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id])
+
+  @@index([inventoryId])
+  @@index([referenceId, referenceType])
+  @@index([status, expiresAt])
+  @@map("stock_reservations")
+}
+
+model StockHistory {
+  id            String   @id @default(uuid())
+  inventoryId   String
+  type          String
+  quantityBefore Int
+  quantityChange Int
+  referenceId   String?
+  referenceType String?
+  note          String?
+  createdAt     DateTime @default(now())
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id])
+
+  @@index([inventoryId])
+  @@index([referenceId])
+  @@map("stock_history")
+}
+
+// ─────────────────────────────────────────────
+// CUSTOMER
+// ─────────────────────────────────────────────
+
+model Customer {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  phone         String?
+  passwordHash  String
+  firstName     String
+  lastName      String
+  isActive      Boolean   @default(true)
+  isVerified    Boolean   @default(false)
+  lastLoginAt   DateTime?
+  loginAttempts Int       @default(0)
+  lockedUntil   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  addresses CustomerAddress[]
+
+  @@index([email])
+  @@map("customers")
+}
+
+model CustomerAddress {
+  id         String  @id @default(uuid())
+  customerId String
+  type       String  @default("shipping")
+  isDefault  Boolean @default(false)
+  firstName  String
+  lastName   String
+  phone      String
+  country    String  @default("MN")
+  city       String
+  district   String
+  street     String
+  postalCode String?
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+  @@map("customer_addresses")
+}
+
+// ─────────────────────────────────────────────
+// CART
+// ─────────────────────────────────────────────
+
+model Cart {
+  id         String   @id @default(uuid())
+  customerId String?
+  sessionId  String?
+  type       String   @default("guest")
+  status     String   @default("active")
+  couponCode String?
+  currency   String   @default("MNT")
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  items     CartItem[]
+  discounts CartDiscount[]
+
+  @@index([customerId])
+  @@index([sessionId])
+  @@index([status])
+  @@map("carts")
+}
+
+model CartItem {
+  id          String   @id @default(uuid())
+  cartId      String
+  productId   String
+  variantId   String?
+  productName String
+  variantName String?
+  sku         String
+  imageUrl    String?
+  quantity    Int
+  unitPrice   Float
+  totalPrice  Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  @@index([cartId])
+  @@map("cart_items")
+}
+
+model CartDiscount {
+  id          String   @id @default(uuid())
+  cartId      String
+  code        String
+  type        String
+  kind        String
+  amount      Float
+  minOrderAmt Float    @default(0)
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  @@index([cartId])
+  @@map("cart_discounts")
+}
+
+// ─────────────────────────────────────────────
+// CHECKOUT
+// ─────────────────────────────────────────────
+
+model Checkout {
+  id            String    @id
+  cartId        String
+  customerId    String?
+  sessionId     String?
+  status        String    @default("created")
+  step          String    @default("customer_info")
+  currency      String    @default("MNT")
+  subtotal      Float
+  discountTotal Float     @default(0)
+  shippingTotal Float     @default(0)
+  taxTotal      Float     @default(0)
+  grandTotal    Float
+  orderId       String?
+  expiresAt     DateTime
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  items    CheckoutItem[]
+  addresses CheckoutAddress[]
+  payment  CheckoutPayment?
+
+  @@index([cartId])
+  @@index([customerId])
+  @@index([status])
+  @@map("checkouts")
+}
+
+model CheckoutItem {
+  id          String   @id @default(uuid())
+  checkoutId  String
+  productId   String
+  variantId   String?
+  productName String
+  variantName String?
+  sku         String
+  imageUrl    String?
+  quantity    Int
+  unitPrice   Float
+  totalPrice  Float
+
+  checkout Checkout @relation(fields: [checkoutId], references: [id], onDelete: Cascade)
+
+  @@index([checkoutId])
+  @@map("checkout_items")
+}
+
+model CheckoutAddress {
+  id         String @id @default(uuid())
+  checkoutId String
+  type       String
+  firstName  String
+  lastName   String
+  phone      String
+  country    String
+  city       String
+  district   String
+  street     String
+  postalCode String?
+
+  checkout Checkout @relation(fields: [checkoutId], references: [id], onDelete: Cascade)
+
+  @@unique([checkoutId, type])
+  @@index([checkoutId])
+  @@map("checkout_addresses")
+}
+
+model CheckoutPayment {
+  id               String   @id @default(uuid())
+  checkoutId       String   @unique
+  gateway          String
+  paymentSessionId String?
+  amount           Float
+  currency         String
+  status           String   @default("pending")
+  createdAt        DateTime @default(now())
+
+  checkout Checkout @relation(fields: [checkoutId], references: [id], onDelete: Cascade)
+
+  @@map("checkout_payments")
+}
+
+// ─────────────────────────────────────────────
+// ORDERS
+// ─────────────────────────────────────────────
+
+model Order {
+  id              String    @id
+  orderNumber     String    @unique
+  customerId      String?
+  guestEmail      String?
+  guestPhone      String?
+  status          String    @default("pending")
+  paymentStatus   String    @default("pending")
+  paymentId       String?
+  currency        String    @default("MNT")
+  subtotal        Float
+  discountTotal   Float     @default(0)
+  shippingTotal   Float
+  taxTotal        Float
+  grandTotal      Float
+  couponCode      String?
+  shippingAddress Json
+  billingAddress  Json
+  shippingMethod  Json
+  trackingNumber  String?
+  notes           String?
+  placedAt        DateTime
+  confirmedAt     DateTime?
+  processedAt     DateTime?
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+  history       OrderHistory[]
+
+  @@index([orderNumber])
+  @@index([customerId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@map("orders")
+}
+
+model OrderItem {
+  id             String @id @default(uuid())
+  orderId        String
+  productId      String
+  variantId      String?
+  productName    String
+  variantName    String?
+  sku            String
+  imageUrl       String?
+  quantity       Int
+  unitPrice      Float
+  discountAmount Float  @default(0)
+  totalPrice     Float
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id             String   @id @default(uuid())
+  orderId        String
+  status         String
+  previousStatus String?
+  actorId        String?
+  actorType      String
+  note           String?
+  createdAt      DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@map("order_status_history")
+}
+
+model OrderHistory {
+  id        String   @id @default(uuid())
+  orderId   String
+  event     String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@map("order_history")
+}
+
+// ─────────────────────────────────────────────
+// PAYMENTS
+// ─────────────────────────────────────────────
+
+model Payment {
+  id             String    @id
+  orderId        String
+  gateway        String
+  status         String    @default("pending")
+  amount         Float
+  currency       String    @default("MNT")
+  gatewayRef     String?
+  gatewayResponse Json?
+  idempotencyKey  String   @unique
+  expiresAt       DateTime
+  paidAt          DateTime?
+  failedAt        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  transactions PaymentTransaction[]
+  history      PaymentHistory[]
+  refunds      Refund[]
+
+  @@index([orderId])
+  @@index([gatewayRef])
+  @@index([status])
+  @@map("payments")
+}
+
+model PaymentTransaction {
+  id        String   @id @default(uuid())
+  paymentId String
+  type      String
+  amount    Float
+  currency  String
+  note      String?
+  createdAt DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+  @@map("payment_transactions")
+}
+
+model PaymentHistory {
+  id         String   @id @default(uuid())
+  paymentId  String?
+  eventType  String
+  rawPayload Json
+  source     String
+  createdAt  DateTime @default(now())
+
+  payment Payment? @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+  @@map("payment_history")
+}
+
+model Refund {
+  id        String    @id @default(uuid())
+  paymentId String
+  orderId   String
+  amount    Float
+  reason    String?
+  status    String    @default("pending")
+  refundedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+  @@index([orderId])
+  @@map("refunds")
+}
+
+// ─────────────────────────────────────────────
+// SHIPPING
+// ─────────────────────────────────────────────
+
+model Shipping {
+  id              String    @id @default(uuid())
+  orderId         String    @unique
+  methodId        String
+  methodName      String
+  courier         String?
+  trackingNumber  String?
+  trackingUrl     String?
+  status          String    @default("created")
+  shippingFee     Float
+  shippingAddress Json
+  estimatedMin    DateTime?
+  estimatedMax    DateTime?
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  trackingEvents ShippingTracking[]
+
+  @@index([orderId])
+  @@index([trackingNumber])
+  @@map("shipping")
+}
+
+model ShippingMethod {
+  id             String  @id @default(uuid())
+  name           String
+  methodId       String  @unique
+  baseFee        Float
+  estimatedDays  Json
+  isActive       Boolean @default(true)
+  serviceAreas   Json?
+
+  @@map("shipping_methods")
+}
+
+model ShippingTracking {
+  id          String   @id @default(uuid())
+  shippingId  String
+  status      String
+  location    String?
+  description String
+  occurredAt  DateTime @default(now())
+
+  shipping Shipping @relation(fields: [shippingId], references: [id])
+
+  @@index([shippingId])
+  @@map("shipping_tracking")
+}
+
+// ─────────────────────────────────────────────
+// ADMIN
+// ─────────────────────────────────────────────
+
+model AdminUser {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         String    @default("support")
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  activities AdminActivity[]
+
+  @@index([email])
+  @@map("admin_users")
+}
+
+model AdminRole {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  permissions Json
+  createdAt   DateTime @default(now())
+
+  @@map("admin_roles")
+}
+
+model AdminActivity {
+  id          String   @id @default(uuid())
+  adminId     String
+  action      String
+  resource    String
+  resourceId  String?
+  details     Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  admin AdminUser @relation(fields: [adminId], references: [id])
+
+  @@index([adminId])
+  @@index([resource, resourceId])
+  @@map("admin_activities")
+}
+
+// ─────────────────────────────────────────────
+// SYSTEM INTEGRATION
+// ─────────────────────────────────────────────
+
+model SystemEvent {
+  id          String   @id @default(uuid())
+  eventType   String
+  sourceSystem String
+  payload     Json
+  processedBy Json     @default("[]")
+  createdAt   DateTime @default(now())
+
+  @@index([eventType])
+  @@index([sourceSystem])
+  @@map("system_events")
+}
+
+model SystemLog {
+  id        String   @id @default(uuid())
+  level     String
+  system    String
+  message   String
+  context   Json?
+  createdAt DateTime @default(now())
+
+  @@index([level])
+  @@index([system])
+  @@map("system_logs")
+}
+
+model SystemRuntime {
+  id        String   @id @default(uuid())
+  service   String   @unique
+  status    String
+  startedAt DateTime
+  metadata  Json?
+  updatedAt DateTime @updatedAt
+
+  @@map("system_runtime")
+}
+
+// ─────────────────────────────────────────────
+// COUPON / PROMOTION
+// ─────────────────────────────────────────────
+
+model Coupon {
+  id                String    @id @default(uuid())
+  code              String    @unique
+  discountType      String    // 'percentage' | 'fixed'
+  discountValue     Float
+  minOrderAmount    Float     @default(0)
+  maxDiscountAmount Float?
+  expiresAt         DateTime?
+  usageLimit        Int       @default(0)  // 0 = unlimited
+  usageCount        Int       @default(0)
+  active            Boolean   @default(true)
+  description       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([code])
+  @@index([active])
+  @@map("coupons")
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────
+
+model Notification {
+  id          String    @id @default(uuid())
+  type        String    // 'email' | 'sms' | 'push'
+  event       String    // 'order_created' | 'payment_success' | 'order_shipped'
+  recipientId String?
+  recipient   String    // email or phone
+  subject     String?
+  body        String
+  status      String    @default("pending")  // 'pending' | 'sent' | 'failed'
+  sentAt      DateTime?
+  failReason  String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  @@index([event])
+  @@index([status])
+  @@index([recipientId])
+  @@map("notifications")
+}

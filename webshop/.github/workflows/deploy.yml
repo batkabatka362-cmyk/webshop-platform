@@ -1,0 +1,210 @@
+# ═══════════════════════════════════════════════
+# WEBSHOP — GitHub Actions CI/CD Pipeline
+# .github/workflows/deploy.yml
+# ═══════════════════════════════════════════════
+
+name: WEBSHOP Deploy Pipeline
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY:         registry.webshop.mn
+  IMAGE_NAME:       webshop/api
+  NODE_VERSION:     '20'
+
+jobs:
+
+  # ── BUILD ──────────────────────────────────
+  build:
+    name: Build & Type Check
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Generate version
+        id: version
+        run: |
+          VERSION="v$(node -p "require('./package.json').version")-build.${{ github.run_number }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "VERSION: $VERSION"
+
+      - name: Build
+        run: npx tsc
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  # ── TEST ───────────────────────────────────
+  test:
+    name: Run Test Suites
+    runs-on: ubuntu-latest
+    needs: build
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER:     webshop_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB:       webshop_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgresql://webshop_user:test_password@localhost:5432/webshop_test
+        run: npx prisma migrate deploy
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Integration tests
+        env:
+          DATABASE_URL: postgresql://webshop_user:test_password@localhost:5432/webshop_test
+          REDIS_URL:    redis://localhost:6379/1
+        run: npm run test:integration
+
+      - name: Workflow tests
+        env:
+          DATABASE_URL: postgresql://webshop_user:test_password@localhost:5432/webshop_test
+          REDIS_URL:    redis://localhost:6379/1
+        run: npm run test:workflow
+
+  # ── CONTAINERIZE ───────────────────────────
+  containerize:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push:    true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+  # ── DEPLOY STAGING ─────────────────────────
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: containerize
+    environment: staging
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+
+    steps:
+      - name: Deploy to staging
+        run: |
+          echo "Deploying ${{ needs.build.outputs.version }} to staging..."
+          curl -X POST ${{ secrets.STAGING_DEPLOY_URL }}/deployments \
+            -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "version":     "${{ needs.build.outputs.version }}",
+              "environment": "staging",
+              "strategy":    "rolling",
+              "deployedBy":  "github-actions"
+            }'
+
+      - name: Wait for staging health
+        run: |
+          for i in {1..30}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ secrets.STAGING_URL }}/health)
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Staging healthy"
+              exit 0
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 10
+          done
+          echo "❌ Staging health check failed"
+          exit 1
+
+  # ── DEPLOY PRODUCTION ──────────────────────
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: production
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy to production (blue-green)
+        run: |
+          curl -X POST ${{ secrets.PROD_DEPLOY_URL }}/deployments \
+            -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "version":     "${{ needs.build.outputs.version }}",
+              "environment": "production",
+              "strategy":    "blue_green",
+              "deployedBy":  "github-actions"
+            }'
+
+      - name: Monitor production health
+        run: |
+          echo "Monitoring production for 10 minutes..."
+          sleep 600  # 10 min monitor window
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ secrets.PROD_URL }}/health)
+          if [ "$STATUS" != "200" ]; then
+            echo "❌ Production unhealthy — triggering rollback"
+            exit 1
+          fi
+          echo "✅ Production deployment successful"
