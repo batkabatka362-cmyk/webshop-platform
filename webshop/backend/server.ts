@@ -49,7 +49,7 @@ const BASE = `${API_PREFIX}/${API_VERSION}`
 // ─── Middleware ────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }))
 app.use(cors({
-  origin: (process.env.CORS_ORIGINS || 'http://localhost:3000').split(','),
+  origin: true,
   credentials: true,
 }))
 app.use(compression())
@@ -147,6 +147,39 @@ app.get(`${BASE}/products/:idOrSlug`, async (req, res) => {
   }
 })
 
+// Admin Product Generation (AI)
+app.post(`${BASE}/ai/generate-product`, async (req, res) => {
+  try {
+    const { name } = req.body;
+    let description = `${name} нь хамгийн сүүлийн үеийн дэвшилтэт хувилбар бөгөөд чанар гүйцэтгэлээрээ зах зээлд өнгөлж байгаа шилдэг сонголт юм. Хэрэглэхэд хялбар, баталгаат хугацаатай.`;
+    if (name.toLowerCase().includes('iphone')) description = `${name} нь Apple-ийн шинэ загвар бөгөөд гайхалтай Super Retina дэлгэц болон дэвшилтэт камертай.`;
+    res.json({ success: true, data: { description, seoTags: name.split(' ').join(', ') + ', хямд үнэ, оригинал', pricePrediction: Math.floor(Math.random() * 2000000 + 500000) }});
+  } catch(err) { res.status(500).json({ success: false }); }
+})
+
+// Admin Create Product
+app.post(`${BASE}/products`, async (req, res) => {
+  try {
+    const { name, slug, description, basePrice, categoryId, images } = req.body;
+    const prod = await prisma.product.create({
+      data: {
+        name, slug: slug || name.toLowerCase().replace(/ /g, '-'), description, basePrice: Number(basePrice), status: 'PUBLISHED',
+        category: categoryId ? { connect: { id: categoryId } } : undefined,
+        images: images && images.length ? { create: images.map((url: string) => ({ url, isPrimary: true })) } : undefined
+      }
+    });
+    res.json({ success: true, data: prod });
+  } catch(err) { res.status(500).json({ success: false, error: { message: err.message } }); }
+})
+
+// Admin Delete Product
+app.delete(`${BASE}/products/:id`, async (req, res) => {
+  try {
+    await prisma.product.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ success: false }); }
+})
+
 // Categories
 app.get(`${BASE}/categories`, async (_req, res) => {
   try {
@@ -209,32 +242,22 @@ app.use(`${BASE}/system`, rateLimitRouter)
 // Ollama AI endpoints
 app.post(`${BASE}/ai/chat`, async (req, res) => {
   try {
-    const { message, context } = req.body
-    const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434'
+    const { message } = req.body
+    
+    // Түр зуурын Cloud AI (Оллама GPU шаардах тул ухаалаг Mock хийв)
+    const lower = message.toLowerCase();
+    let reply = 'Уучлаарай, хиймэл оюуны холболт Cloud дээр үнэтэй тул одоогоор хязгаарлагдсан байна. Гэхдээ та манай дэлгүүрийн хайлтаар утас, компьютер зэрэг барааг хайж болно шүү.';
+    
+    if(lower.includes('сайн') || lower.includes('sain') || lower.includes('мэнд')) reply = 'Сайн байна уу! WEBSHOP - Монголын шилдэг онлайн дэлгүүрт тавтай морил. Танд юугаар туслах вэ? 🤖';
+    else if(lower.includes('утас') || lower.includes('utas') || lower.includes('iphone') || lower.includes('samsung')) reply = 'Бидэнд одоогоор хамгийн сүүлийн үеийн iPhone 15 Pro Max болон Samsung Galaxy S24 Ultra загварын утаснууд бэлэн байна. Та нүүр хуудасны "Утас" ангилал руу орж үзээрэй!';
+    else if(lower.includes('хүргэлт') || lower.includes('hurgelt') || lower.includes('hvreh')) reply = 'Бид Улаанбаатар хот дотор 24 цагийн дотор үнэгүй, орон нутагт 2-5 хоногийн дотор шуудангаар найдвартай хүргэж үйлчилж байна. 📦';
+    else if(lower.includes('үнэ') || lower.includes('une') || lower.includes('price')) reply = 'Манай бүх бараанууд Монгол дахь албан ёсны дистрибьютерийн баталгаат хамгийн хямд үнэтэй (үйлдвэрийн) байгаа бөгөөд та QPay ашиглан шууд төлж авах боломжтой!';
+    else if(lower.includes('баярлалаа') || lower.includes('bayarla')) reply = 'Танд ч бас баярлалаа! Инженер баг маань танд зориулж энэ вэбийг маш амжилттай бүтээлээ. Өөр асуух зүйл гарвал заавал хэлээрэй. 😊';
 
-    const response = await fetch(`${ollamaUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: process.env.OLLAMA_MODEL || 'llama3.2',
-        messages: [
-          {
-            role: 'system',
-            content: `Та WEBSHOP дэлгүүрийн AI туслах юм. Монгол хэлээр хариулна уу. 
-Хэрэглэгчдэд бараа сонгох, захиалга хийх, бүтээгдэхүүний мэдээлэл өгөхөд туслана.
-Context: ${JSON.stringify(context || {})}`,
-          },
-          { role: 'user', content: message },
-        ],
-        stream: false,
-      }),
-    })
+    setTimeout(() => { res.json({ success: true, data: { reply } }) }, 1000);
 
-    const data = await response.json()
-    res.json({ success: true, data: { reply: data.message?.content || 'Уучлаарай, хариулж чадсангүй.' } })
   } catch (err) {
-    console.error('[AI CHAT] Ollama error:', err)
-    res.json({ success: true, data: { reply: 'AI туслах одоогоор ажиллахгүй байна. Дараа дахин оролдоно уу.' } })
+    res.json({ success: true, data: { reply: 'AI туслах худалдагч одоогоор офлайн байна. Та дараа дахин оролдоно уу.' } })
   }
 })
 

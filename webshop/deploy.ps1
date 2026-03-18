@@ -18,8 +18,6 @@ gh repo create webshop-platform --public --push --source=. --remote=origin
 Write-Host '-> 2. Railway login...' -ForegroundColor Yellow
 railway login
 railway init --name webshop-platform
-railway add --database postgresql
-railway add --database redis
 
 Write-Host '=== 3. Environment variables ===' -ForegroundColor Yellow
 $JWT = Read-Host "ACCESS_JWT_SECRET (press Enter to auto-generate)"

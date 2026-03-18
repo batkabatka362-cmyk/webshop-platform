@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard — WEBSHOP</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --void:#E4E4E7; --deep:#F4F4F5; --smoke:#D4D4D8; --smoke2:#A1A1AA;
+  --bone:#27272A; --dim:#71717A; --ember:#18181B; --lava:#000000;
+  --bg: #F4F4F5; --surface: #FFFFFF;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background: var(--bg); font-family:'Inter',sans-serif; color:var(--bone); display:flex; height:100vh; overflow:hidden; }
+aside { width:260px; background:var(--surface); border-right:1px solid var(--smoke); padding:32px 24px; display:flex; flex-direction:column; gap:24px; }
+.logo { font-size:20px; font-weight:600; letter-spacing:1px; margin-bottom:12px; }
+.nav-item { padding:12px 16px; border-radius:8px; display:block; text-decoration:none; color:var(--dim); font-weight:500; transition:all .2s; }
+.nav-item.active, .nav-item:hover { background:var(--smoke); color:var(--bone); }
+main { flex:1; padding:40px 60px; overflow-y:auto; }
+header { display:flex; justify-content:space-between; align-items:center; margin-bottom:32px; }
+h1 { font-weight:600; font-size:28px; }
+.btn { background:var(--ember); color:#fff; border:none; padding:10px 20px; border-radius:6px; font-weight:500; cursor:pointer; transition:all .2s; font-size:14px; }
+.btn:hover { background:var(--lava); box-shadow:0 4px 12px rgba(0,0,0,.15); }
+.btn-ai { background:linear-gradient(135deg, #6366f1, #a855f7); color:#fff; }
+.btn-ai:hover { box-shadow:0 4px 20px rgba(168, 85, 247, .4); }
+table { width:100%; border-collapse:collapse; background:var(--surface); border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.04); }
+th, td { padding:16px 24px; text-align:left; border-bottom:1px solid var(--smoke); font-size:14px; }
+th { color:var(--dim); font-weight:500; text-transform:uppercase; font-size:12px; letter-spacing:1px; }
+.p-img { width:44px; height:44px; border-radius:6px; object-fit:cover; background:var(--smoke); border:1px solid var(--smoke2); }
+.del-btn { color:#ef4444; background:none; border:none; cursor:pointer; font-weight:500; }
+.del-btn:hover { text-decoration:underline; }
+
+/* Modal */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .3s; z-index:100; }
+.modal-overlay.on { opacity:1; pointer-events:all; }
+.modal { background:var(--surface); width:100%; max-width:600px; border-radius:16px; padding:32px; box-shadow:0 10px 40px rgba(0,0,0,.1); transform:translateY(20px); transition:transform .3s; max-height:90vh; overflow-y:auto; }
+.modal-overlay.on .modal { transform:translateY(0); }
+.m-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; font-size:20px; font-weight:600; }
+.cx { background:none; border:none; cursor:pointer; font-size:20px; color:var(--dim); }
+.fg { display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
+.fg label { font-size:12px; font-weight:600; color:var(--dim); text-transform:uppercase; letter-spacing:.5px; }
+.fi { padding:12px; border:1px solid var(--smoke); border-radius:8px; font-family:'Inter',sans-serif; font-size:14px; outline:none; transition:border-color .2s; }
+.fi:focus { border-color:var(--ember); }
+textarea.fi { resize:vertical; min-height:90px; line-height: 1.5; }
+.ai-row { display:flex; gap:12px; align-items:center; }
+.ai-row .fi { flex:1; }
+
+.toast { position:fixed; bottom:32px; right:32px; background:var(--bone); color:#fff; padding:16px 24px; border-radius:8px; font-size:14px; opacity:0; pointer-events:none; transition:opacity .3s; z-index:200; box-shadow:0 4px 20px rgba(0,0,0,.2); font-weight: 500; }
+.toast.on { opacity:1; pointer-events:all; }
+</style>
+</head>
+<body>
+
+<aside>
+  <div class="logo">WEBSHOP ADMIN</div>
+  <a href="#" class="nav-item active">📦 Бараа удирдах</a>
+  <a href="#" class="nav-item">📈 Захиалга төлбөр</a>
+  <a href="#" class="nav-item">⚙️ Тохиргоо</a>
+  <a href="index.html" class="nav-item" style="margin-top:auto">← Нийтийн сайт руу буцах</a>
+</aside>
+
+<main>
+  <header>
+    <h1>Агуулах (Бараанууд)</h1>
+    <button class="btn" onclick="openM()">+ Бараа нэмэх</button>
+  </header>
+  
+  <table id="tbl">
+    <thead>
+      <tr>
+        <th>Зураг</th>
+        <th>Үндсэн Нэр</th>
+        <th>Ангилал</th>
+        <th>Үнэ</th>
+        <th>Удирдах</th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <tr><td colspan="5" style="text-align:center;color:var(--dim);padding:40px">Баазаас уншиж байна...</td></tr>
+    </tbody>
+  </table>
+</main>
+
+<div class="modal-overlay" id="mo">
+  <div class="modal">
+    <div class="m-head">Шинэ бараа бүртгэх <button class="cx" onclick="closeM()">✕</button></div>
+    
+    <div class="fg">
+      <label>Барааны нэр (Загвар)</label>
+      <div class="ai-row">
+        <input type="text" id="p-name" class="fi" placeholder="Жинхэнэ нэрээ бичнэ үү. Жнь: iPhone 15 Pro Max">
+        <button class="btn btn-ai" type="button" onclick="autoGen()" id="aibtn">✨ AI Auto-Generate</button>
+      </div>
+      <span style="font-size:11px;color:var(--dim)">Нэрийг нь бичээд AI товч дарвал бусдыг нь автоматаар зохионо!</span>
+    </div>
+    
+    <div class="fg">
+      <label>Үнэ (₮ Төгрөг)</label>
+      <input type="number" id="p-price" class="fi" placeholder="Жишээ: 3500000">
+    </div>
+    
+    <div class="fg">
+      <label>Худалдааны дэлгэрэнгүй тайлбар</label>
+      <textarea id="p-desc" class="fi" placeholder="Барааны тухай хүний анхаарал татах тайлбар..."></textarea>
+    </div>
+    
+    <div class="fg">
+      <label>Хайлтын түлхүүр үгс (SEO Tags)</label>
+      <input type="text" id="p-tags" class="fi" placeholder="Утас, шинэ, хямд...">
+    </div>
+    
+    <div class="fg">
+      <label>Ангилал сонгох</label>
+      <select id="p-cat" class="fi">
+        <option value="">Ерөнхий</option>
+      </select>
+    </div>
+    
+    <div class="fg">
+      <label>Зурагны холбоос (URL)</label>
+      <input type="text" id="p-img" class="fi" placeholder="https:// зурагны албан ёсны линк хуулж тавина уу">
+    </div>
+    
+    <button class="btn" style="width:100%;margin-top:24px;padding:14px;font-size:16px" onclick="saveP()">Шинээр хадгалах</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'https://webshop-platform-production.up.railway.app';
+let cats = [];
+
+async function loadCats() {
+  try {
+    const r=await fetch(API+'/api/v1/categories');
+    const d=await r.json();
+    if(d.success) {
+      cats = d.data;
+      document.getElementById('p-cat').innerHTML = '<option value="">Ерөнхий</option>' + cats.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+    }
+  } catch{}
+}
+
+async function loadProds() {
+  try {
+    const r=await fetch(API+'/api/v1/products?limit=50');
+    const d=await r.json();
+    const tb = document.getElementById('tbody');
+    if(d.success && d.data.items.length) {
+      tb.innerHTML = d.data.items.map(p=>`
+        <tr>
+          <td><img src="${p.images?.[0]?.url||'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=100'}" class="p-img"></td>
+          <td style="font-weight:600">${p.name}</td>
+          <td>${p.category?.name||'Ерөнхий'}</td>
+          <td style="font-family:monospace;font-size:15px">₮${(p.basePrice||0).toLocaleString()}</td>
+          <td><button class="del-btn" onclick="delP('${p.id}')">Устгах</button></td>
+        </tr>
+      `).join('');
+    } else {
+      tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--dim);padding:40px">Дэлгүүрт бараа олдсонгүй. Устгасан байна.</td></tr>';
+    }
+  } catch{}
+}
+
+loadCats(); loadProds();
+
+function openM(){ document.getElementById('mo').classList.add('on'); }
+function closeM(){ document.getElementById('mo').classList.remove('on'); }
+
+function showT(m){
+  const el = document.getElementById('toast');
+  el.textContent = m; el.classList.add('on');
+  setTimeout(()=>el.classList.remove('on'), 3500);
+}
+
+async function autoGen(){
+  const name = document.getElementById('p-name').value.trim();
+  if(!name) return showT('Эхлээд барааны НЭРИЙГ заавал бичнэ үү!');
+  
+  const b = document.getElementById('aibtn');
+  b.textContent = 'Бодож байна...'; b.style.opacity = '0.7';
+  
+  try {
+    const r = await fetch(API+'/api/v1/ai/generate-product', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name}) });
+    const d = await r.json();
+    if(d.success) {
+      document.getElementById('p-desc').value = d.data.description;
+      document.getElementById('p-tags').value = d.data.seoTags;
+      if(!document.getElementById('p-price').value) document.getElementById('p-price').value = d.data.pricePrediction;
+      showT('AI автоматаар дэлгэрэнгүй мэдээллийг зохиолоо! ✨');
+    }
+  } catch{}
+  b.textContent = '✨ AI Auto-Generate'; b.style.opacity = '1';
+}
+
+async function saveP(){
+  const data = {
+    name: document.getElementById('p-name').value.trim(),
+    basePrice: document.getElementById('p-price').value,
+    description: document.getElementById('p-desc').value,
+    categoryId: document.getElementById('p-cat').value || undefined,
+    images: document.getElementById('p-img').value ? [document.getElementById('p-img').value] : []
+  };
+  if(!data.name || !data.basePrice) return showT('Нэр болон Үнийг заавал оруулна уу!');
+  
+  try {
+    await fetch(API+'/api/v1/products', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
+    showT('Бараа онлайн дэлгүүрт амжилттай нэмэгдлээ! 🎉');
+    closeM();
+    loadProds(); 
+    document.getElementById('p-name').value='';
+    document.getElementById('p-price').value='';
+    document.getElementById('p-desc').value='';
+    document.getElementById('p-tags').value='';
+    document.getElementById('p-img').value='';
+  } catch{ showT('Алдаа гарлаа!'); }
+}
+
+async function delP(id){
+  if(!confirm('Та энэ барааг устгахдаа БҮРЭН итгэлтэй байна уу? Public сайтнаас устгагдах болно!')) return;
+  try {
+    await fetch(API+'/api/v1/products/'+id, { method:'DELETE' });
+    showT('Бараа устгагдлаа.');
+    loadProds();
+  } catch{}
+}
+</script>
+</body>
+</html>

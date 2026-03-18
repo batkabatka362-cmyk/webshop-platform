@@ -1,0 +1,16 @@
+{
+  "name": "webshop-root",
+  "private": true,
+  "scripts": {
+    "dev": "cd webshop && npm run dev",
+    "build": "cd webshop && npm run build",
+    "start": "cd webshop && npm run start",
+    "db:generate": "cd webshop && npm run db:generate",
+    "db:push": "cd webshop && npm run db:push",
+    "db:migrate": "cd webshop && npm run db:migrate",
+    "db:seed": "cd webshop && npm run db:seed",
+    "db:studio": "cd webshop && npm run db:studio",
+    "typecheck": "cd webshop && npm run typecheck",
+    "deploy": "cd webshop && powershell -ExecutionPolicy Bypass -File deploy.ps1"
+  }
+}
