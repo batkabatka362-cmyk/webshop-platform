@@ -20,19 +20,23 @@ datasource db {
 // ─────────────────────────────────────────────
 
 model Product {
-  id          String   @id @default(uuid())
-  slug        String   @unique
-  name        String
-  description String?
-  sku         String   @unique
-  basePrice   Float
-  currency    String   @default("MNT")
-  categoryId  String?
-  status      String   @default("draft")
-  attributes  Json?
-  deletedAt   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String         @id @default(uuid())
+  sku             String         @unique
+  name            String
+  slug            String         @unique
+  description     String?
+  basePrice       Float
+  currency        String         @default("MNT") // Kept original currency field
+  categoryId      String?
+  brandId         String? // Added from instruction
+  supplierId      String? // Added from instruction
+  status          String         @default("active") // Changed from "draft" to "active"
+  attributes      Json? // Kept original attributes field
+  seoTags         String? // Added from instruction
+  isAiGenerated   Boolean        @default(false) // V23 AI Product Inventor
+  deletedAt       DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   category  Category?       @relation(fields: [categoryId], references: [id])
   variants  ProductVariant[]
@@ -720,4 +724,91 @@ model Notification {
   @@index([status])
   @@index([recipientId])
   @@map("notifications")
+}
+
+// ─────────────────────────────────────────────
+// V19 AI AUTONOMOUS AGENT MODELS
+// ─────────────────────────────────────────────
+
+model AiMemory {
+  id        String   @id @default(uuid())
+  context   String
+  type      String   // "learning", "rule", "observation", "metric"
+  createdAt DateTime @default(now())
+  
+  @@index([type])
+  @@map("ai_memory")
+}
+
+model AiAgentLog {
+  id        String   @id @default(uuid())
+  agent     String   // "WatcherAgent", "ExecutionAgent"
+  action    String   // "discount_applied", "inventory_warned", "email_queued"
+  details   Json
+  createdAt DateTime @default(now())
+  
+  @@index([agent])
+  @@index([action])
+  @@map("ai_agent_logs")
+}
+
+// ─────────────────────────────────────────────
+// V20 AI CEO MODELS (Capital & Labs)
+// ─────────────────────────────────────────────
+
+model AiBudget {
+  id        String   @id @default(uuid())
+  amount    Float    @default(0) // Virtual money AI has
+  updatedAt DateTime @updatedAt
+  
+  @@map("ai_budgets")
+}
+
+model AiExperiment {
+  id          String   @id @default(uuid())
+  title       String
+  hypothesis  String
+  type        String   // "discount", "ui_change"
+  targetId    String   // Product ID or Page component
+  status      String   @default("running") // "running", "success", "failed"
+  metrics     Json     // Initial state vs current state to measure ROI
+  cost        Float    @default(0) // How much budget was spent
+  revenue     Float    @default(0) // How much it earned
+  startedAt   DateTime @default(now())
+  concludedAt DateTime?
+  
+  @@index([status])
+  @@map("ai_experiments")
+}
+
+// ─────────────────────────────────────────────
+// V21 AI SWARM MODELS (Generative UI)
+// ─────────────────────────────────────────────
+
+model AiComponent {
+  id          String   @id @default(uuid())
+  location    String   // e.g., "home_banner", "product_alert"
+  html        String   // The generative HTML/CSS output from AI CTO
+  active      Boolean  @default(true)
+  experimentId String? // If linked to an active A/B test
+  createdAt   DateTime @default(now())
+  
+  @@index([location])
+  @@index([active])
+  @@map("ai_components")
+}
+
+// ─────────────────────────────────────────────
+// V23 AI CONGLOMERATE MODELS (Negotiator & Inventor)
+// ─────────────────────────────────────────────
+
+model ChatPromoCode {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  discountPct Float
+  isUsed      Boolean  @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@map("chat_promo_codes")
 }

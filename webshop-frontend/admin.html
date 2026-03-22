@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin Dashboard — WEBSHOP</title>
+<title>Admin Dashboard V23 Autonomous Conglomerate — WEBSHOP</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -14,7 +14,7 @@
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background: var(--bg); font-family:'Inter',sans-serif; color:var(--bone); display:flex; height:100vh; overflow:hidden; }
 aside { width:260px; background:var(--surface); border-right:1px solid var(--smoke); padding:32px 24px; display:flex; flex-direction:column; gap:24px; }
-.logo { font-size:20px; font-weight:600; letter-spacing:1px; margin-bottom:12px; }
+.logo { font-size:20px; font-weight:800; letter-spacing:1px; margin-bottom:12px; display:flex; align-items:center; gap:8px }
 .nav-item { padding:12px 16px; border-radius:8px; display:block; text-decoration:none; color:var(--dim); font-weight:500; transition:all .2s; }
 .nav-item.active, .nav-item:hover { background:var(--smoke); color:var(--bone); }
 main { flex:1; padding:40px 60px; overflow-y:auto; }
@@ -28,13 +28,15 @@ table { width:100%; border-collapse:collapse; background:var(--surface); border-
 th, td { padding:16px 24px; text-align:left; border-bottom:1px solid var(--smoke); font-size:14px; }
 th { color:var(--dim); font-weight:500; text-transform:uppercase; font-size:12px; letter-spacing:1px; }
 .p-img { width:44px; height:44px; border-radius:6px; object-fit:cover; background:var(--smoke); border:1px solid var(--smoke2); }
-.del-btn { color:#ef4444; background:none; border:none; cursor:pointer; font-weight:500; }
-.del-btn:hover { text-decoration:underline; }
+.btn-ghost { color:var(--dim); background:none; border:none; cursor:pointer; font-weight:500; padding:4px 8px; border-radius:4px; }
+.btn-ghost:hover { background:var(--smoke); color:var(--bone); }
+.del-btn { color:#ef4444; }
+.del-btn:hover { background:#fee2e2; }
 
 /* Modal */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .3s; z-index:100; }
 .modal-overlay.on { opacity:1; pointer-events:all; }
-.modal { background:var(--surface); width:100%; max-width:600px; border-radius:16px; padding:32px; box-shadow:0 10px 40px rgba(0,0,0,.1); transform:translateY(20px); transition:transform .3s; max-height:90vh; overflow-y:auto; }
+.modal { background:var(--surface); width:100%; max-width:700px; border-radius:16px; padding:32px; box-shadow:0 10px 40px rgba(0,0,0,.1); transform:translateY(20px); transition:transform .3s; max-height:90vh; overflow-y:auto; }
 .modal-overlay.on .modal { transform:translateY(0); }
 .m-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; font-size:20px; font-weight:600; }
 .cx { background:none; border:none; cursor:pointer; font-size:20px; color:var(--dim); }
@@ -43,189 +45,782 @@ th { color:var(--dim); font-weight:500; text-transform:uppercase; font-size:12px
 .fi { padding:12px; border:1px solid var(--smoke); border-radius:8px; font-family:'Inter',sans-serif; font-size:14px; outline:none; transition:border-color .2s; }
 .fi:focus { border-color:var(--ember); }
 textarea.fi { resize:vertical; min-height:90px; line-height: 1.5; }
-.ai-row { display:flex; gap:12px; align-items:center; }
-.ai-row .fi { flex:1; }
+.pv-box { width:80px; height:80px; border-radius:8px; object-fit:cover; border:1px solid var(--smoke2); display:none; margin-top:8px; }
 
-.toast { position:fixed; bottom:32px; right:32px; background:var(--bone); color:#fff; padding:16px 24px; border-radius:8px; font-size:14px; opacity:0; pointer-events:none; transition:opacity .3s; z-index:200; box-shadow:0 4px 20px rgba(0,0,0,.2); font-weight: 500; }
+.toast { position:fixed; bottom:32px; right:32px; background:var(--bone); color:#fff; padding:16px 24px; border-radius:8px; font-size:14px; opacity:0; pointer-events:none; transition:opacity .3s; z-index:99999; box-shadow:0 4px 20px rgba(0,0,0,.2); font-weight: 500; }
 .toast.on { opacity:1; pointer-events:all; }
+
+#login-screen { position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column; }
+@media print { body * { visibility: hidden; } #print-area, #print-area * { visibility: visible; } #print-area { position: absolute; left: 0; top: 0; width: 100%; border: none; background: #fff; padding: 0; margin: 0; } }
 </style>
 </head>
 <body>
 
+<div id="print-area" style="display:none;background:#fff;z-index:9999999;position:fixed;inset:0"></div>
+<div id="login-screen" style="display:none">
+  <div style="background:var(--surface);padding:40px;border-radius:16px;width:100%;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,.1)">
+    <div style="font-size:24px;font-weight:700;margin-bottom:8px;text-align:center">🛡️ WEBSHOP V23</div>
+    <div style="color:var(--dim);text-align:center;margin-bottom:32px">Аюулгүй Системд Нэвтрэх</div>
+    <div class="fg"><label>И-мэйл хаяг</label><input type="email" id="l-email" class="fi" value="admin@webshop.mn"></div>
+    <div class="fg"><label>Нууц үг</label><input type="password" id="l-pass" class="fi" value="admin123"></div>
+    <button class="btn" style="width:100%;margin-top:24px;padding:14px;font-size:16px" onclick="doLogin()">Нэвтрэх</button>
+  </div>
+</div>
+
 <aside>
-  <div class="logo">WEBSHOP ADMIN</div>
-  <a href="#" class="nav-item active">📦 Бараа удирдах</a>
-  <a href="#" class="nav-item">📈 Захиалга төлбөр</a>
-  <a href="#" class="nav-item">⚙️ Тохиргоо</a>
-  <a href="index.html" class="nav-item" style="margin-top:auto">← Нийтийн сайт руу буцах</a>
+  <div class="logo">✦ WEBSHOP <span style="font-size:10px;background:var(--bone);color:#fff;padding:2px 6px;border-radius:4px;vertical-align:middle;margin-left:4px">V23</span></div>
+  <a href="#" class="nav-item active" id="nt-products" onclick="switchTab('products')">📦 Бараа удирдах</a>
+  <a href="#" class="nav-item" id="nt-orders" onclick="switchTab('orders')">📈 Захиалга & Хүргэлт</a>
+  <a href="#" class="nav-item" id="nt-customers" onclick="switchTab('customers')">👥 Хэрэглэгчид</a>
+  <a href="#" class="nav-item" id="nt-abandoned" onclick="switchTab('abandoned')">🛒 Орхигдсон сагс</a>
+  <a href="#" class="nav-item" id="nt-marketing" onclick="switchTab('marketing')">📧 Маркетинг</a>
+  <a href="#" class="nav-item" id="nt-coupons" onclick="switchTab('coupons')">🎟 Урамшуулал</a>
+  <a href="#" class="nav-item" id="nt-suppliers" onclick="switchTab('suppliers')">🏢 Нийлүүлэгч</a>
+  <a href="#" class="nav-item" id="nt-logs" onclick="switchTab('logs')">🛡️ Системийн Лог</a>
+  <a href="#" class="nav-item" id="nt-settings" onclick="switchTab('settings')">⚙️ Тохиргоо</a>
+  <a href="#" class="nav-item" id="nt-ai" onclick="switchTab('ai')" style="background:linear-gradient(135deg, rgba(99,102,241,0.1), rgba(168,85,247,0.1));color:#8b5cf6;font-weight:600;margin-top:16px">✨ AI Автоматжуулалт</a>
+  <a href="#" class="nav-item" id="nt-conglomerate" onclick="switchTab('conglomerate')" style="background:linear-gradient(135deg, rgba(16,185,129,0.1), rgba(52,211,153,0.1));color:#10b981;font-weight:600;margin-top:8px">🏬 AI Корпораци (V23)</a>
+  <a href="index.html" class="nav-item" style="margin-top:auto" onclick="localStorage.removeItem('ws_token')">← Системээс гарах (Logout)</a>
 </aside>
 
 <main>
-  <header>
-    <h1>Агуулах (Бараанууд)</h1>
-    <button class="btn" onclick="openM()">+ Бараа нэмэх</button>
-  </header>
-  
-  <table id="tbl">
-    <thead>
-      <tr>
-        <th>Зураг</th>
-        <th>Үндсэн Нэр</th>
-        <th>Ангилал</th>
-        <th>Үнэ</th>
-        <th>Удирдах</th>
-      </tr>
-    </thead>
-    <tbody id="tbody">
-      <tr><td colspan="5" style="text-align:center;color:var(--dim);padding:40px">Баазаас уншиж байна...</td></tr>
-    </tbody>
-  </table>
+  <!-- PRODUCTS VIEW -->
+  <div id="view-products">
+    <header>
+      <h1>Агуулах (Бараанууд)</h1>
+      <div style="display:flex;gap:16px;align-items:center">
+        <div id="p-valuation" style="font-weight:600;font-size:14px;color:var(--dim)">📦 Агуулахын нийт үнэлгээ: Уншиж байна...</div>
+        <button class="btn del-btn" style="background:#fee2e2;color:#ef4444" onclick="bulkDelP()">🗑️ Сонгосныг Устгах</button>
+        <button class="btn" onclick="openM()">+ Бараа нэмэх</button>
+      </div>
+    </header>
+    <table id="tbl">
+      <thead>
+        <tr><th width="40"><input type="checkbox" id="chk-all" onclick="tickAll(this)"></th><th>Зураг</th><th>Үндсэн Нэр</th><th>Ангилал</th><th>Үнэ & Цэвэр Ашиг</th><th>Удирдах</th></tr>
+      </thead>
+      <tbody id="tbody"><tr><td colspan="6" style="text-align:center;color:var(--dim);padding:40px">Баазаас уншиж байна...</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- ORDERS VIEW (INCLUDES FUNNEL) -->
+  <div id="view-orders" style="display:none">
+    <header style="margin-bottom:16px">
+      <h1>Захиалга & Хүргэлтийн хяналт</h1>
+      <div style="display:flex;gap:12px">
+        <button class="btn btn-ai" onclick="aiInsight()">✨ AI Зах зээлийн зөвлөгөө</button>
+        <button class="btn" onclick="openOM()">+ Гараар захиалга үүсгэх</button>
+      </div>
+    </header>
+
+    <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke);margin-bottom:24px">
+      <div style="color:var(--dim);font-size:13px;text-transform:uppercase;margin-bottom:16px;font-weight:600">📉 Сүүлийн 7 хоногийн Орлогын График</div>
+      <canvas id="revChart" height="60"></canvas>
+    </div>
+
+    <div style="display:flex;gap:24px;margin-bottom:24px">
+      <div style="flex:1;background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke)">
+        <div style="color:var(--dim);font-size:13px;text-transform:uppercase;margin-bottom:16px;font-weight:600">🍩 Борлуулалт Ангиллаар</div>
+        <div style="height:220px;display:flex;justify-content:center"><canvas id="catChart"></canvas></div>
+      </div>
+      <div style="flex:1;background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke)">
+        <div style="color:var(--dim);font-size:13px;text-transform:uppercase;margin-bottom:16px;font-weight:600">📊 Шилдэг 5 Бараа</div>
+        <div style="height:220px;display:flex;justify-content:center"><canvas id="topChart"></canvas></div>
+      </div>
+    </div>
+
+    <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke);margin-bottom:24px">
+      <div style="color:var(--dim);font-size:13px;text-transform:uppercase;margin-bottom:16px;font-weight:600">📊 Борлуулалтын Юүлүүр Аналитик (Funnel)</div>
+      <div style="display:flex;gap:12px;text-align:center" id="fnl-box">Уншиж байна...</div>
+    </div>
+
+    <div style="display:flex;gap:24px;margin-bottom:32px">
+      <div style="background:var(--surface);padding:24px;border-radius:12px;flex:1;border:1px solid var(--smoke)">
+        <div style="color:var(--dim);font-size:13px;text-transform:uppercase;margin-bottom:8px">Нийт Орлого (Total Gross)</div>
+        <div style="font-size:28px;font-weight:600;font-family:monospace" id="st-rev">₮0</div>
+      </div>
+      <div style="background:var(--surface);padding:24px;border-radius:12px;flex:1;border:1px solid var(--smoke)">
+        <div style="color:var(--dim);font-size:13px;text-transform:uppercase;margin-bottom:8px">Нийт Захиалга (Total Orders)</div>
+        <div style="font-size:28px;font-weight:600;font-family:monospace" id="st-ord">0</div>
+      </div>
+    </div>
+    <table id="otbl">
+      <thead>
+        <tr><th>Огноо</th><th>Захиалагч</th><th>Бараанууд</th><th>Нийт дүн</th><th>Төлөв & Хяналт</th><th>Үйлдэл</th></tr>
+      </thead>
+      <tbody id="otbody"><tr><td colspan="6" style="text-align:center;color:var(--dim);padding:40px">Уншиж байна...</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- CUSTOMERS VIEW -->
+  <div id="view-customers" style="display:none">
+    <header><h1>Хэрэглэгчид (CRM)</h1></header>
+    <table id="ctbl">
+      <thead><tr><th>Бүртгүүлсэн огноо</th><th>Нэр</th><th>И-мэйл хаяг</th><th>LTV Сегмент</th><th>Үйлдэл</th></tr></thead>
+      <tbody id="ctbody"><tr><td colspan="5" style="text-align:center;color:var(--dim);padding:40px">Уншиж байна...</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- ABANDONED CARTS VIEW -->
+  <div id="view-abandoned" style="display:none">
+    <header><h1>Орхигдсон Сагс (Recovery)</h1></header>
+    <div style="background:#fef2f2;color:#991b1b;padding:16px;border-radius:8px;margin-bottom:24px;font-size:14px;border:1px solid #fca5a5">
+      <b>Шинжилгээ:</b> Хүмүүсийн 60% нь сагсандаа бараа хийгээд орхидог. Эдгээр хэрэглэгчид рүү <b>Урамшууллын И-мэйл</b> илгээж борлуулалт болгон хувиргах боломжтой.
+    </div>
+    <table id="atbl">
+      <thead><tr><th>Огноо</th><th>Сагсны төлөв</th><th>Барааны тоо</th><th>Нийт үнэ цэнэ</th><th>Хамгаалах арга хэмжээ</th></tr></thead>
+      <tbody id="atbody"><tr><td colspan="5" style="text-align:center;color:var(--dim);padding:40px">Уншиж байна...</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- MARKETING VIEW -->
+  <div id="view-marketing" style="display:none">
+    <header><h1>Маркетинг & И-мэйл Цацах (Broadcast)</h1></header>
+    <div style="background:#fefce8;padding:24px;border-radius:12px;border:1px solid #fef08a;margin-bottom:24px;max-width:800px">
+      <div style="font-weight:600;margin-bottom:8px;color:#854d0e">🤖 Ухаалаг Автоматжуулалт (Auto Drip Campaign)</div>
+      <div style="display:flex;align-items:center;gap:12px"><input type="checkbox" id="mk-auto" style="width:20px;height:20px" onchange="showT(this.checked?'Ухаалаг систем асаалаа! Үүнээс хойш автоматаар илгээнэ.':'Автоматжуулалт унтарлаа!')"><label for="mk-auto" style="font-size:14px;color:#854d0e;cursor:pointer">Сүүлийн 30 хоног худалдан авалт хийгээгүй (Унтмал) хэрэглэгчдэд 3 хоног тутамд 10% хямдралын купон автоматаар илгээх ухаалаг тохиргоо.</label></div>
+    </div>
+    <div style="background:var(--surface);padding:32px;border-radius:12px;border:1px solid var(--smoke);max-width:800px">
+      <div style="color:var(--dim);font-size:14px;margin-bottom:24px">Бүх бүртгэлтэй хэрэглэгчид рүүгээ эсвэл зөвхөн зорилтот бүлэг рүүгээ шинэ бараа болон хямдралын мэдээллийг нэн даруй түгээх систем.</div>
+      <div class="fg"><label>Зорилтот бүлэг (Target Audience)</label>
+        <select id="mk-target" class="fi">
+          <option value="all">Бүх хэрэглэгчид рүү (Масс)</option>
+          <option value="vip">Зөвхөн VIP хэрэглэгчид (Өндөр LTV-тэй хүмүүс)</option>
+          <option value="sleeping">Сүүлийн 30 хоног худалдан авалт хийгээгүй (Унтмал)</option>
+        </select>
+      </div>
+      <div class="fg"><label>И-мэйлийн Гарчиг</label><input type="text" id="mk-sbj" class="fi" placeholder="Тусгай Хөнгөлөлт - Зөвхөн Танд"></div>
+      <div class="fg"><label>И-мэйлийн Агуулга</label><textarea id="mk-body" class="fi" style="min-height:200px" placeholder="Сайн байна уу? Манай дэлгүүрт..."></textarea></div>
+      <button class="btn btn-ai" style="width:100%;margin-top:24px;padding:14px;font-size:16px" onclick="sendMarketing()">🚀 Сонгосон хэрэглэгчид рүү Цацах (Send)</button>
+    </div>
+  </div>
+
+  <!-- COUPONS VIEW -->
+  <div id="view-coupons" style="display:none">
+    <header>
+      <h1>Урамшууллын кодууд</h1>
+      <button class="btn" onclick="openCpM()">+ Нэмэх</button>
+    </header>
+    <table id="cptbl">
+      <thead><tr><th>Promo Код</th><th>Хөнгөлөлт</th><th>Удирдах</th></tr></thead>
+      <tbody id="cptbody"><tr><td colspan="3" style="text-align:center;color:var(--dim);padding:40px">Уншиж байна...</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- SUPPLIERS VIEW -->
+  <div id="view-suppliers" style="display:none">
+    <header><h1>Нийлүүлэгч Байгууллагууд</h1><button class="btn" onclick="openSupM()">+ Нэмэх</button></header>
+    <table id="stbl">
+      <thead><tr><th>Байгууллагын нэр</th><th>Холбогдох дугаар</th><th>Төлөв</th><th>Үйлдэл</th></tr></thead>
+      <tbody id="stbody"><tr><td colspan="4" style="text-align:center;color:var(--dim);padding:40px">Уншиж байна...</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- LOGS VIEW -->
+  <div id="view-logs" style="display:none">
+    <header><h1>Системийн Хяналт (Audit Logs)</h1></header>
+    <table id="ltbl">
+      <thead><tr><th>Огноо</th><th>Үйлдэл</th><th>Модуль</th><th>ID болон Дэлгэрэнгүй Мэдээлэл</th></tr></thead>
+      <tbody id="ltbody"><tr><td colspan="4" style="text-align:center;color:var(--dim);padding:40px">Уншиж байна...</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- SETTINGS VIEW -->
+  <div id="view-settings" style="display:none">
+    <header><h1>Системийн Тохиргоо</h1></header>
+    <div style="background:var(--surface);padding:32px;border-radius:12px;max-width:600px;border:1px solid var(--smoke)">
+      <div class="fg"><label>Дэлгүүрийн Нэр</label><input type="text" id="set-name" class="fi" placeholder="WEBSHOP"></div>
+      <div class="fg" style="flex-direction:row;align-items:center;margin-top:24px;margin-bottom:24px">
+        <input type="checkbox" id="set-ai" checked style="width:20px;height:20px;cursor:pointer">
+        <label style="margin:0;font-size:15px;color:var(--bone);cursor:pointer;user-select:none" onclick="document.getElementById('set-ai').click()">Нийтийн сайт дээр AI Худалдагч туслахыг асаах</label>
+      </div>
+      <button class="btn" style="width:100%;padding:14px;font-size:16px" onclick="saveSettings()">Тохиргоо Хадгалах</button>
+    </div>
+  </div>
+
+  <!-- CONGLOMERATE V23 VIEW -->
+  <div id="view-conglomerate" style="display:none">
+    <header><h1>🏬 AI Корпораци (Autonomous Conglomerate)</h1><button class="btn btn-ai" onclick="loadConglomerate()" style="background:#10b981">🔄 Шинэчлэх</button></header>
+    
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+      <!-- Chat Promo Codes -->
+      <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid #7c3aed">
+        <div style="font-weight:600;margin-bottom:12px;font-size:16px"><span style="color:#7c3aed">🎁</span> AI Худалдагчийн Promo Кодууд</div>
+        <div style="font-size:13px;color:var(--dim);margin-bottom:20px;line-height:1.5">Нийтийн вэбсайт дээрх AI Chat Negotiator хэрэглэгчидтэй харилцаж байхдаа эдгээр тусгай хямдралын кодуудыг үүсгэсэн байна.</div>
+        <div id="ai-conglomerate-promos" style="max-height:400px;overflow-y:auto;font-family:monospace;font-size:13px;color:var(--bone);background:var(--bg);padding:16px;border-radius:8px">Уншиж байна...</div>
+      </div>
+      
+      <!-- Sourcing Products -->
+      <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid #10b981">
+        <div style="font-weight:600;margin-bottom:12px;font-size:16px"><span style="color:#10b981">🛍️</span> AI Автоматаар үүсгэсэн Бараанууд</div>
+        <div style="font-size:13px;color:var(--dim);margin-bottom:20px;line-height:1.5">AI Sourcing Agent трэнд судалгаанд (CMO) үндэслэн эдгээр бараануудыг бие даан зохион бүтээж дэлгүүрт нэмсэн байна.</div>
+        <div id="ai-conglomerate-products" style="max-height:400px;overflow-y:auto;font-family:monospace;font-size:13px;color:var(--bone);background:var(--bg);padding:16px;border-radius:8px">Уншиж байна...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI AUTOMATION VIEW -->
+  <div id="view-ai" style="display:none">
+    <header>
+      <h1>✨ AI Автоматжуулалт (Engine)</h1>
+      <button class="btn btn-ai" onclick="loadAiStatus()">🔄 Систем шинэчлэх</button>
+    </header>
+    
+    <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid #8b5cf6;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:13px;color:var(--dim);text-transform:uppercase;margin-bottom:8px;font-weight:600">Одоогийн AI Модел</div>
+        <div style="font-size:24px;font-weight:600" id="ai-model-name">Уншиж байна...</div>
+        <div style="font-size:13px;color:#10b981;margin-top:4px" id="ai-status-text">● Систем хэвийн (Online)</div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <select id="ai-provider" class="fi" style="width:120px" onchange="updAiConfig()">
+          <option value="ollama">Ollama</option>
+          <option value="openai">OpenAI</option>
+          <option value="mock">Mock</option>
+        </select>
+        <input type="text" id="ai-model-input" class="fi" style="width:160px" placeholder="Загвар (qwen3:8b)" onchange="updAiConfig()">
+      </div>
+    </div>
+    
+    <!-- AI Watcher Agent Controller -->
+    <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px dashed #10b981;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:600;font-size:16px;color:var(--bone);margin-bottom:8px">🧠 Agent Loop (AI Стар-ап Захирал)</div>
+        <p style="font-size:13px;color:var(--dim);margin:0;max-width:500px">Энэхүү моторыг асааснаар AI нь дэлгүүрийн төлөвийг автоматаар хянаж (60 секунд тутамд) өөрийн санхүүгээр туршилт хийж орлого нэмэгдүүлнэ.</p>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <label style="display:flex;align-items:center;cursor:pointer;gap:8px">
+          <input type="checkbox" id="ai-watcher-toggle" style="width:24px;height:24px;accent-color:#10b981" onchange="toggleAiWatcher()">
+          <span style="font-weight:600;color:#10b981">АСААХ (AUTO)</span>
+        </label>
+      </div>
+    </div>
+    
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+      <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke)">
+        <div style="font-weight:600;margin-bottom:12px"><span style="color:#f59e0b">💰</span> AI Захирлын Хөрөнгө (Capital)</div>
+        <div style="font-family:monospace;font-size:24px;font-weight:700;color:var(--bone)" id="ai-budget-display">₮0</div>
+        <div style="font-size:12px;color:var(--dim);margin-top:8px">Туршилт явуулах зардал эндээс хасагдаж, олсон орлого нь нэмэгдэнэ.</div>
+      </div>
+      <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke)">
+        <div style="font-weight:600;margin-bottom:12px"><span style="color:#ef4444">🧪</span> Яг одоо явагдаж буй Туршилтууд (Labs)</div>
+        <div id="ai-experiments-list" style="max-height:100px;overflow-y:auto;font-family:monospace;font-size:12px;color:var(--bone)">Ачааллаж байна...</div>
+      </div>
+    </div>
+    
+    <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke);margin-bottom:24px">
+      <div style="font-weight:600;margin-bottom:16px"><span style="color:#8b5cf6">●</span> AI Санах Ой болон Үйлдлийн Түүх (Memory & Logs)</div>
+      <div id="ai-memory-list" style="max-height:300px;overflow-y:auto;background:var(--bg);padding:16px;border-radius:8px;font-family:monospace;font-size:12px;line-height:1.6">Уншиж байна...</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+      <!-- Orders AI -->
+      <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke)">
+        <div style="font-weight:600;margin-bottom:12px;font-size:16px">📦 Захиалга боловсруулах AI</div>
+        <p style="font-size:13px;color:var(--dim);line-height:1.6;margin-bottom:16px">Хүлээгдэж буй төлбөр нь баталгаажсан захиалгуудыг автоматаар 'Савлагдаж байна' төлөв рүү шилжүүлж дүн шинжилгээ хийнэ.</p>
+        <button class="btn" style="width:100%" onclick="runAiBot('orders')">🚀 Захиалгын Робот ажиллуулах</button>
+        <div id="ai-orders-res" style="margin-top:16px;font-size:12px;color:var(--dim);white-space:pre-wrap"></div>
+      </div>
+
+      <!-- Suppliers AI -->
+      <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke)">
+        <div style="font-weight:600;margin-bottom:12px;font-size:16px">🏭 Нийлүүлэлтийн AI</div>
+        <p style="font-size:13px;color:var(--dim);line-height:1.6;margin-bottom:16px">Нөөц дуусч буй бараануудыг илрүүлж нийлүүлэгчдэд захиалга өгөх автомат зөвлөмж боловсруулах.</p>
+        <button class="btn" style="width:100%" onclick="runAiBot('suppliers')">🚀 Нийлүүлэлтийн Робот ажиллуулах</button>
+        <div id="ai-suppliers-res" style="margin-top:16px;font-size:12px;color:var(--dim);white-space:pre-wrap"></div>
+      </div>
+
+      <!-- Customers AI -->
+      <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke)">
+        <div style="font-weight:600;margin-bottom:12px;font-size:16px">👥 CRM & Churn Prediction AI</div>
+        <p style="font-size:13px;color:var(--dim);line-height:1.6;margin-bottom:16px">Хэрэглэгчдийн зан төлөвийг шинжилж, орхиж явах эрсдэлтэй (Churn) хүмүүсийг илрүүлэх.</p>
+        <button class="btn" style="width:100%" onclick="runAiBot('customers')">🚀 Хэрэглэгчийн шинжилгээ</button>
+        <div id="ai-customers-res" style="margin-top:16px;font-size:12px;color:var(--dim);white-space:pre-wrap"></div>
+      </div>
+
+      <!-- Pricing AI -->
+      <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke)">
+        <div style="font-weight:600;margin-bottom:12px;font-size:16px">💵 Үнийн Бодлогын AI</div>
+        <p style="font-size:13px;color:var(--dim);line-height:1.6;margin-bottom:16px">Борлуулалтын тоон мэдээлэлд үндэслэн ямар бараанд хямдрал зарлах, үнэ нэмэх талаар шинжлэх.</p>
+        <button class="btn" style="width:100%" onclick="runAiBot('pricing')">🚀 Үнийн бодлого шинжлэх</button>
+        <div id="ai-pricing-res" style="margin-top:16px;font-size:12px;color:var(--dim);white-space:pre-wrap"></div>
+      </div>
+      
+      <!-- Marketing AI -->
+      <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke);grid-column:1 / span 2">
+        <div style="font-weight:600;margin-bottom:12px;font-size:16px">📧 Маркетингийн Автоматжуулалт AI</div>
+        <p style="font-size:13px;color:var(--dim);line-height:1.6;margin-bottom:16px">И-мэйл маркетингийн гарчиг, контент, хөнгөлөлтийн стратегийг тухайн зорилтот бүлэгт зориулан хиймэл оюунаар автоматаар үүсгэнэ уу.</p>
+        <div style="display:flex;gap:12px;margin-bottom:16px">
+          <select id="ai-mk-target" class="fi" style="flex:1"><option value="vip">VIP Хэрэглэгчид</option><option value="sleeping">Идэвхгүй (Sleeping)</option><option value="all">Бүгд</option></select>
+          <select id="ai-mk-goal" class="fi" style="flex:1"><option value="sales">Борлуулалт өсгөх</option><option value="retention">Урамшуулах (Retention)</option></select>
+        </div>
+        <button class="btn btn-ai" style="width:100%" onclick="runAiBot('marketing')">✨ Маркетингийн контент үүсгэх</button>
+        <div id="ai-marketing-res" style="margin-top:16px;font-size:13px;color:var(--bone);background:var(--bg);padding:16px;border-radius:8px;border:1px dashed var(--smoke);white-space:pre-wrap;display:none"></div>
+      </div>
+    </div>
+  </div>
 </main>
 
+
+<!-- MODALS FOR V6 EXTENSIBILITY -->
+<!-- PRODUCT MODAL -->
 <div class="modal-overlay" id="mo">
   <div class="modal">
-    <div class="m-head">Шинэ бараа бүртгэх <button class="cx" onclick="closeM()">✕</button></div>
-    
-    <div class="fg">
-      <label>Барааны нэр (Загвар)</label>
-      <div class="ai-row">
-        <input type="text" id="p-name" class="fi" placeholder="Жинхэнэ нэрээ бичнэ үү. Жнь: iPhone 15 Pro Max">
+    <div class="m-head"><span id="m-title">Шинэ бараа бүртгэх</span> <button class="cx" onclick="closeM()">✕</button></div>
+    <div class="fg"><label>Барааны нэр</label>
+      <div style="display:flex;gap:12px;align-items:center;">
+        <input type="text" id="p-name" class="fi" placeholder="iPhone 15 Pro Max" style="flex:1">
         <button class="btn btn-ai" type="button" onclick="autoGen()" id="aibtn">✨ AI Auto-Generate</button>
       </div>
-      <span style="font-size:11px;color:var(--dim)">Нэрийг нь бичээд AI товч дарвал бусдыг нь автоматаар зохионо!</span>
     </div>
-    
-    <div class="fg">
-      <label>Үнэ (₮ Төгрөг)</label>
-      <input type="number" id="p-price" class="fi" placeholder="Жишээ: 3500000">
+    <div style="display:flex;gap:12px;margin-bottom:16px">
+      <div class="fg" style="flex:1;margin-bottom:0"><label>Зарах үнэ (₮ Төгрөг)</label><input type="number" id="p-price" class="fi"></div>
+      <div class="fg" style="flex:1;margin-bottom:0"><label>Татсан үнэ (Cost ₮)</label><input type="number" id="p-cost" class="fi" placeholder="Үндсэн өртөг"></div>
+      <div class="fg" style="flex:1;margin-bottom:0"><label>Хямдарсан үнэ (Sale ₮)</label><input type="number" id="p-sale" class="fi" placeholder="Хоосон байж болно"></div>
     </div>
-    
-    <div class="fg">
-      <label>Худалдааны дэлгэрэнгүй тайлбар</label>
-      <textarea id="p-desc" class="fi" placeholder="Барааны тухай хүний анхаарал татах тайлбар..."></textarea>
+    <div class="fg"><label>Худалдааны тайлбар</label><textarea id="p-desc" class="fi"></textarea></div>
+    <div class="fg"><label>Хайлтын үгс</label><input type="text" id="p-tags" class="fi"></div>
+    <div class="fg"><label>Ангилал сонгох</label><select id="p-cat" class="fi"><option value="">Ерөнхий</option></select></div>
+    <div class="fg"><label>Зурагны холбоос (URL)</label><input type="text" id="p-img" class="fi" oninput="updatePv()"><img id="p-pv" class="pv-box"></div>
+    <button class="btn" style="width:100%;margin-top:24px;padding:14px;font-size:16px" onclick="saveP()">Хадгалах</button>
+  </div>
+</div>
+
+<!-- VARIANT MODAL -->
+<div class="modal-overlay" id="mo-var">
+  <div class="modal" style="max-width:800px">
+    <div class="m-head"><span id="v-title">Барааны Мэтрикс хувилбарууд (Variants)</span> <button class="cx" onclick="document.getElementById('mo-var').classList.remove('on')">✕</button></div>
+    <div style="color:var(--dim);font-size:13px;margin-bottom:16px">Зөвхөн нэг төрлийн бараанд олон төрлийн үзүүлэлт (Өнгө, Хэмжээ) үүсгэнэ.</div>
+    <div style="display:flex;gap:12px;margin-bottom:24px;background:var(--bg);padding:16px;border-radius:8px">
+      <input type="text" id="v-name" class="fi" placeholder="Жнь: S Size, Улаан өнгө" style="flex:1">
+      <input type="text" id="v-sku" class="fi" placeholder="SKU" style="width:100px">
+      <input type="number" id="v-price" class="fi" placeholder="Үнэ (₮)" style="width:120px">
+      <input type="number" id="v-stock" class="fi" placeholder="Нөөц" style="width:100px">
+      <button class="btn btn-ai" onclick="saveVar()">+ Нэмэх</button>
     </div>
-    
-    <div class="fg">
-      <label>Хайлтын түлхүүр үгс (SEO Tags)</label>
-      <input type="text" id="p-tags" class="fi" placeholder="Утас, шинэ, хямд...">
+    <table id="vtbl">
+      <thead><tr><th>Хувилбар Нэр</th><th>SKU Код</th><th>Тусгай Үнэ</th><th>Нөөц (Stock)</th><th>Хасах</th></tr></thead>
+      <tbody id="vtbody"><tr><td colspan="5" style="text-align:center;color:var(--dim);padding:20px">Уншиж байна...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- SUP LIER MODAL -->
+<div class="modal-overlay" id="mo-sup">
+  <div class="modal" style="max-width:400px">
+    <div class="m-head"><span id="sup-title">Нийлүүлэгч бүртгэх</span> <button class="cx" onclick="document.getElementById('mo-sup').classList.remove('on')">✕</button></div>
+    <div class="fg"><label>Байгууллагын нэр</label><input type="text" id="sup-n" class="fi"></div>
+    <div class="fg"><label>Утасны дугаар</label><input type="text" id="sup-p" class="fi"></div>
+    <div class="fg"><label>Төлөв</label><input type="text" id="sup-s" class="fi" placeholder="Хэвийн"></div>
+    <button class="btn" style="width:100%;margin-top:24px" onclick="saveSup()">Хадгалах</button>
+  </div>
+</div>
+
+<!-- CUSTOMER EDIT MODAL -->
+<div class="modal-overlay" id="mo-cus-edit">
+  <div class="modal" style="max-width:800px">
+    <div class="m-head">Хэрэглэгчийн Хавтас (CRM) <button class="cx" onclick="document.getElementById('mo-cus-edit').classList.remove('on')">✕</button></div>
+    <div style="display:flex;gap:24px">
+      <div style="flex:1">
+        <div class="fg"><label>Овог</label><input type="text" id="ce-ln" class="fi"></div>
+        <div class="fg"><label>Нэр</label><input type="text" id="ce-fn" class="fi"></div>
+        <div class="fg"><label>И-мэйл</label><input type="email" id="ce-em" class="fi"></div>
+        <button class="btn" style="width:100%;margin-top:24px" onclick="saveCus()">Мэдээлэл Шинэчлэх</button>
+        <div style="background:#fefce8;padding:16px;border-radius:8px;border:1px solid #fef08a;margin-top:24px">
+          <div style="font-size:14px;font-weight:600;color:#854d0e;margin-bottom:8px">Урамшууллын Оноо (Virtual Wallet) 💳</div>
+          <div style="display:flex;gap:8px">
+            <input type="number" id="ce-wallet-amt" class="fi" style="margin:0;flex:1" placeholder="Дүн (₮)">
+            <button class="btn" style="background:#eab308;color:#fff" onclick="addWallet()">Оноо бэлэглэх</button>
+          </div>
+        </div>
+      </div>
+      <div style="flex:1;background:var(--bg);padding:16px;border-radius:8px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--bone)">Ажилтны дотоод тэмдэглэл хөтлөх</div>
+        <textarea id="ce-note-input" class="fi" style="width:100%;min-height:80px;margin-bottom:12px;font-size:12px" placeholder="Шинэ мэдээлэл..."></textarea>
+        <button class="btn" style="width:100%;background:var(--smoke);color:var(--bone);margin-bottom:24px" onclick="saveCusNote()">+ Тэмдэглэл нэмэх</button>
+        <div id="ce-notes-list" style="max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:8px"></div>
+      </div>
     </div>
-    
-    <div class="fg">
-      <label>Ангилал сонгох</label>
-      <select id="p-cat" class="fi">
-        <option value="">Ерөнхий</option>
+  </div>
+</div>
+
+<!-- COUPON MODAL -->
+<div class="modal-overlay" id="mo-cp">
+  <div class="modal" style="max-width:400px">
+    <div class="m-head"><span id="cp-title">Урамшууллын код</span> <button class="cx" onclick="document.getElementById('mo-cp').classList.remove('on')">✕</button></div>
+    <div class="fg"><label>Урамшууллын Код</label><input type="text" id="cp-code" class="fi" placeholder="Жнь: VIP2026"></div>
+    <div class="fg"><label>Хөнгөлөлт (%)</label><input type="number" id="cp-val" class="fi" placeholder="10"></div>
+    <button class="btn" style="width:100%;margin-top:24px" onclick="saveCp()">Хадгалах</button>
+  </div>
+</div>
+
+<!-- ORDER MANUAL MODAL -->
+<div class="modal-overlay" id="mo-order">
+  <div class="modal">
+    <div class="m-head">Гараар захиалга үүсгэх <button class="cx" onclick="document.getElementById('mo-order').classList.remove('on')">✕</button></div>
+    <div class="fg"><label>Захиалагчийн нэр, Утас</label><input type="text" id="mo-cus" class="fi" placeholder="Жнь: Дорж (99110000)"></div>
+    <div class="fg"><label>Бараа сонгох</label><select id="mo-prod" class="fi"></select></div>
+    <div class="fg"><label>Тохирсон дүнг оруулах (₮)</label><input type="number" id="mo-price" class="fi" placeholder="Тохирсон үнээр борлуулах бол бичнэ үү"></div>
+    <button class="btn" style="width:100%;margin-top:24px;padding:14px;font-size:16px" onclick="saveOM()">Захиалга Баталгаажуулах & Нэхэмжлэх үүсгэх</button>
+  </div>
+</div>
+
+<!-- TRACKING MODAL -->
+<div class="modal-overlay" id="mo-track">
+  <div class="modal">
+    <div class="m-head">Хүргэлтийн төлөв шинэчлэх <button class="cx" onclick="document.getElementById('mo-track').classList.remove('on')">✕</button></div>
+    <div class="fg"><label>Хүргэлтийн төлөв</label>
+      <select id="mo-t-status" class="fi">
+        <option value="pending">Хүлээгдэж байна</option>
+        <option value="packaging">Савлагдаж байна</option>
+        <option value="shipped">Хүргэлтэд гарсан</option>
+        <option value="DELIVERED">Хүргэгдсэн</option>
       </select>
     </div>
-    
-    <div class="fg">
-      <label>Зурагны холбоос (URL)</label>
-      <input type="text" id="p-img" class="fi" placeholder="https:// зурагны албан ёсны линк хуулж тавина уу">
-    </div>
-    
-    <button class="btn" style="width:100%;margin-top:24px;padding:14px;font-size:16px" onclick="saveP()">Шинээр хадгалах</button>
+    <div class="fg"><label>Хяналтын код (Tracking Code)</label><input type="text" id="mo-t-code" class="fi" placeholder="Жнь: MONGOLPOST-88123"></div>
+    <button class="btn" style="width:100%;margin-top:24px;padding:14px;font-size:16px" onclick="saveTrack()">Төлөв Хадгалах</button>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 const API = 'https://webshop-platform-production.up.railway.app';
-let cats = [];
+let ALL_PRODS = [], cats = [], ALL_CUS = [], ALL_CP = [], ALL_SUP = [];
+let editingId = null;
+let editingTrackId = null;
+let activeVariantProductId = null;
 
-async function loadCats() {
+// V6 FETCH INTERCEPTOR
+const origFetch = window.fetch.bind(window);
+window.fetch = async function(url, config) {
+  if(!config) config = {};
+  if(!config.headers) config.headers = {};
+  const t = localStorage.getItem('ws_token');
+  if(t) config.headers['Authorization'] = `Bearer ${t}`;
+  return origFetch(url, config);
+};
+
+// V6 AUTH LOGIN
+async function doLogin() {
+  const e=document.getElementById('l-email').value, p=document.getElementById('l-pass').value;
   try {
-    const r=await fetch(API+'/api/v1/categories');
-    const d=await r.json();
-    if(d.success) {
-      cats = d.data;
-      document.getElementById('p-cat').innerHTML = '<option value="">Ерөнхий</option>' + cats.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-    }
-  } catch{}
-}
-
-async function loadProds() {
-  try {
-    const r=await fetch(API+'/api/v1/products?limit=50');
-    const d=await r.json();
-    const tb = document.getElementById('tbody');
-    if(d.success && d.data.items.length) {
-      tb.innerHTML = d.data.items.map(p=>`
-        <tr>
-          <td><img src="${p.images?.[0]?.url||'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=100'}" class="p-img"></td>
-          <td style="font-weight:600">${p.name}</td>
-          <td>${p.category?.name||'Ерөнхий'}</td>
-          <td style="font-family:monospace;font-size:15px">₮${(p.basePrice||0).toLocaleString()}</td>
-          <td><button class="del-btn" onclick="delP('${p.id}')">Устгах</button></td>
-        </tr>
-      `).join('');
-    } else {
-      tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--dim);padding:40px">Дэлгүүрт бараа олдсонгүй. Устгасан байна.</td></tr>';
-    }
-  } catch{}
-}
-
-loadCats(); loadProds();
-
-function openM(){ document.getElementById('mo').classList.add('on'); }
-function closeM(){ document.getElementById('mo').classList.remove('on'); }
-
-function showT(m){
-  const el = document.getElementById('toast');
-  el.textContent = m; el.classList.add('on');
-  setTimeout(()=>el.classList.remove('on'), 3500);
-}
-
-async function autoGen(){
-  const name = document.getElementById('p-name').value.trim();
-  if(!name) return showT('Эхлээд барааны НЭРИЙГ заавал бичнэ үү!');
-  
-  const b = document.getElementById('aibtn');
-  b.textContent = 'Бодож байна...'; b.style.opacity = '0.7';
-  
-  try {
-    const r = await fetch(API+'/api/v1/ai/generate-product', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name}) });
+    const r = await origFetch(API+'/api/v1/auth/admin/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:e,password:p})});
     const d = await r.json();
     if(d.success) {
-      document.getElementById('p-desc').value = d.data.description;
-      document.getElementById('p-tags').value = d.data.seoTags;
-      if(!document.getElementById('p-price').value) document.getElementById('p-price').value = d.data.pricePrediction;
-      showT('AI автоматаар дэлгэрэнгүй мэдээллийг зохиолоо! ✨');
+      localStorage.setItem('ws_token', d.token);
+      document.getElementById('login-screen').style.display='none';
+      showT('Системд амжилттай нэвтэрлээ!');
+      initApp();
+    } else showT(d.message || 'Нэвтрэх эрхгүй байна!');
+  }catch{ showT('Сервертэй холбогдох боломжгүй байна'); }
+}
+
+// V6 AUDIT LOGS
+async function loadLogs() {
+  try {
+    const r=await window.fetch(API+'/api/v1/admin/logs'); const d=await r.json();
+    document.getElementById('ltbody').innerHTML=d.data.map(l=>`<tr><td style="color:var(--dim);font-size:13px">${new Date(l.createdAt).toLocaleString()}</td><td><span style="font-weight:600;padding:4px 8px;background:var(--smoke);border-radius:4px;font-size:12px">${l.action}</span></td><td>${l.resource}</td><td style="font-size:12px;font-family:monospace">${l.resourceId||'-'} <br><span style="color:var(--dim)">${JSON.stringify(l.details)}</span></td></tr>`).join('');
+  } catch{}
+}
+
+// Routing
+const ALL_TABS = ['products', 'orders', 'customers', 'abandoned', 'marketing', 'coupons', 'suppliers', 'logs', 'settings', 'ai', 'conglomerate'];
+function switchTab(t) {
+  ALL_TABS.forEach(x => { document.getElementById('nt-'+x).classList.remove('active'); document.getElementById('view-'+x).style.display = 'none'; });
+  document.getElementById('nt-'+t).classList.add('active'); document.getElementById('view-'+t).style.display = 'block';
+  
+  if(t === 'products') loadProds();
+  if(t === 'orders') { loadOrders(); loadStats(); loadProds(); loadFunnel(); }
+  if(t === 'settings') loadSettings();
+  if(t === 'customers') loadCus();
+  if(t === 'coupons') loadCp();
+  if(t === 'suppliers') loadSup();
+  if(t === 'abandoned') loadAband();
+  if(t === 'logs') loadLogs();
+  if(t === 'ai') loadAiStatus();
+  if(t === 'conglomerate') { document.getElementById('ai-conglomerate-promos').innerHTML='Уншиж байна...'; document.getElementById('ai-conglomerate-products').innerHTML='Уншиж байна...'; loadConglomerate(); }
+}
+function showT(m){ const e = document.getElementById('toast'); e.textContent = m; e.classList.add('on'); setTimeout(()=>e.classList.remove('on'), 3500); }
+
+// Generic Fetcher logic
+async function loadProds() {
+  try {
+    const r=await fetch(API+'/api/v1/products?limit=100'); const d=await r.json();
+    if(d.success) {
+      ALL_PRODS = d.data.items;
+      const totalValuation = ALL_PRODS.reduce((sum, p) => sum + ((p.attributes?.costPrice || p.basePrice) * 50), 0); // Mocking 50 units avg stock per item
+      document.getElementById('p-valuation').innerHTML = `📦 Агуулахын нийт хөрөнгө: <span style="color:#16a34a;font-size:18px">₮${totalValuation.toLocaleString()}</span>`;
+      document.getElementById('tbody').innerHTML = ALL_PRODS.map(p=>{
+        const cb = p.basePrice || 0; const cc = p.attributes?.costPrice || 0; const mrgn = (cb && cc) ? Math.round(((cb - cc) / cb) * 100) : 0;
+        const prcHtml = `₮${cb.toLocaleString()}<br><span style="color:${mrgn>0?'#16a34a':mrgn<0?'#ef4444':'var(--dim)'};font-size:12px;font-family:sans-serif">Ашиг: ${mrgn}% (₮${(cb-cc).toLocaleString()})</span>`;
+        return `<tr><td><input type="checkbox" class="chk-prod" value="${p.id}"></td><td><img src="${p.media?.[0]?.url||'https://via.placeholder.com/44'}" class="p-img"></td><td style="font-weight:600">${p.name}</td><td>${p.category?.name||'Eрөнхий'}</td><td style="font-family:monospace">${prcHtml}</td><td><button class="btn-ghost" onclick="openVarM('${p.id}')">🛒 Хувилбар</button> <button class="btn-ghost" onclick="editP('${p.id}')" style="margin-left:8px">Засах</button> <button class="btn-ghost del-btn" onclick="delP('${p.id}')">Устгах</button></td></tr>`;
+      }).join('');
+      document.getElementById('mo-prod').innerHTML = ALL_PRODS.map(p=>`<option value="${p.id}" data-price="${p.basePrice}">${p.name} (₮${p.basePrice})</option>`).join('');
     }
   } catch{}
-  b.textContent = '✨ AI Auto-Generate'; b.style.opacity = '1';
 }
 
-async function saveP(){
-  const data = {
-    name: document.getElementById('p-name').value.trim(),
-    basePrice: document.getElementById('p-price').value,
-    description: document.getElementById('p-desc').value,
-    categoryId: document.getElementById('p-cat').value || undefined,
-    images: document.getElementById('p-img').value ? [document.getElementById('p-img').value] : []
-  };
-  if(!data.name || !data.basePrice) return showT('Нэр болон Үнийг заавал оруулна уу!');
+// AI Engine JS logic
+async function loadAiStatus() {
+  try {
+    const r=await fetch(API+'/api/v1/ai/automation/status'); const d=await r.json();
+    if(d.success) {
+      document.getElementById('ai-model-name').textContent = d.data.model.toUpperCase() + ' (' + d.data.provider + ')';
+      const stat = document.getElementById('ai-status-text');
+      if(d.data.aiOnline) { stat.textContent = '● Систем хэвийн (Online)'; stat.style.color = '#10b981'; }
+      else { stat.textContent = '● Систем холбогдсонгүй (Унасан эсвэл Mock)'; stat.style.color = '#f59e0b'; }
+      document.getElementById('ai-provider').value = d.data.provider;
+      document.getElementById('ai-model-input').value = d.data.model;
+    }
+  } catch{}
   
+  // Load Agents State
   try {
-    await fetch(API+'/api/v1/products', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
-    showT('Бараа онлайн дэлгүүрт амжилттай нэмэгдлээ! 🎉');
-    closeM();
-    loadProds(); 
-    document.getElementById('p-name').value='';
-    document.getElementById('p-price').value='';
-    document.getElementById('p-desc').value='';
-    document.getElementById('p-tags').value='';
-    document.getElementById('p-img').value='';
-  } catch{ showT('Алдаа гарлаа!'); }
-}
+    const r2 = await fetch(API+'/api/v1/ai/agents/state'); const d2 = await r2.json();
+    if(d2.success) {
+      document.getElementById('ai-watcher-toggle').checked = d2.active;
+      
+      // Update Budget
+      document.getElementById('ai-budget-display').textContent = '₮' + d2.budget.toLocaleString();
+      
+      // Update Experiments
+      const expBox = document.getElementById('ai-experiments-list');
+      const esc = s => (s||'').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      if(d2.experiments && d2.experiments.length) {
+        let eh = '';
+        d2.experiments.forEach(e => eh += `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--smoke)">[<span style="color:#ef4444">${esc(e.status)}</span>] <b>${esc(e.title)}:</b> ${esc(e.hypothesis)} (Зарцуулсан: ₮${e.cost})</div>`);
+        expBox.innerHTML = eh;
+      } else {
+        expBox.textContent = "Идэвхтэй туршилт алга. AI таамаглал дэвшүүлээгүй байна.";
+      }
 
-async function delP(id){
-  if(!confirm('Та энэ барааг устгахдаа БҮРЭН итгэлтэй байна уу? Public сайтнаас устгагдах болно!')) return;
-  try {
-    await fetch(API+'/api/v1/products/'+id, { method:'DELETE' });
-    showT('Бараа устгагдлаа.');
-    loadProds();
+      // Update Memory & Logs
+      const memBox = document.getElementById('ai-memory-list');
+      if(d2.memory.length || d2.logs.length) {
+        let h = '';
+        d2.memory.forEach(m => h += `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--smoke)"><span style="color:var(--dim)">[${new Date(m.createdAt).toLocaleTimeString()} - ${m.type.toUpperCase()}]</span> ${esc(m.context)}</div>`);
+        d2.logs.forEach(l => h += `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--smoke);color:#8b5cf6"><span style="color:var(--dim)">[${new Date(l.createdAt).toLocaleTimeString()} - ACTION]</span> ${esc(l.agent)} дуудсан: ${esc(l.action)} ${esc(JSON.stringify(l.details))}</div>`);
+        memBox.innerHTML = h;
+      } else {
+        memBox.textContent = "AI-д одоогоор өнгөрсөн санах ой алга байна.";
+      }
+    }
   } catch{}
 }
+async function loadConglomerate() {
+  try {
+    const r3 = await fetch(API+'/api/v1/ai/conglomerate/status');
+    const d3 = await r3.json();
+    if(d3.success) {
+      const pcBox = document.getElementById('ai-conglomerate-promos');
+      const prBox = document.getElementById('ai-conglomerate-products');
+      
+      if(d3.data.aiPromos && d3.data.aiPromos.length) {
+        pcBox.innerHTML = d3.data.aiPromos.map(x => `<div style="padding:12px;margin-bottom:8px;border-radius:6px;background:rgba(255,255,255,0.05);border-left:3px solid #7c3aed"><b style="color:#7c3aed;font-size:14px">${x.code}</b> <span style="margin-left:8px;background:#7c3aed;color:#fff;padding:2px 6px;border-radius:4px;font-size:11px">-${x.discountPct}%</span><br><div style="color:var(--dim);margin-top:4px">Дуусах: ${new Date(x.expiresAt).toLocaleString()} | Ашигласан: ${x.isUsed ? '<span style="color:#10b981">Тийм</span>' : 'Үгүй'}</div></div>`).join('');
+      } else { pcBox.innerHTML = '<div style="color:var(--dim)">AI одоогоор ямар нэг хямдралын код үүсгээгүй байна.</div>'; }
+      
+      if(d3.data.aiProducts && d3.data.aiProducts.length) {
+        prBox.innerHTML = d3.data.aiProducts.map(x => `<div style="padding:12px;margin-bottom:8px;border-radius:6px;background:rgba(255,255,255,0.05);border-left:3px solid #10b981"><b style="color:#10b981;font-size:14px">${x.name}</b> <span style="margin-left:8px;color:var(--bone)">₮${x.basePrice.toLocaleString()}</span><br><div style="color:var(--dim);margin-top:4px">SKU: ${x.sku} <br> SEO: ${x.seoTags || 'Хоосон'}</div></div>`).join('');
+      } else { prBox.innerHTML = '<div style="color:var(--dim)">AI одоогоор шинэ бараа зохион бүтээгээгүй байна.</div>'; }
+    }
+  } catch{}
+}
+async function toggleAiWatcher() {
+  const on = document.getElementById('ai-watcher-toggle').checked;
+  try {
+    const r = await fetch(API+'/api/v1/ai/agents/toggle', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({on})});
+    const d = await r.json();
+    showT(d.message);
+  } catch{ showT('Алдаа гарлаа'); }
+}
+async function updAiConfig() {
+  const p = document.getElementById('ai-provider').value;
+  const m = document.getElementById('ai-model-input').value;
+  try {
+    const r=await fetch(API+'/api/v1/ai/config', {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:p, model:m})});
+    const d=await r.json();
+    if(d.success) { showT('AI Модел шинэчлэгдлээ!'); loadAiStatus(); }
+  } catch{}
+}
+async function runAiBot(type) {
+  showT('AI бодож байна...');
+  document.getElementById('ai-'+type+'-res').textContent = 'Уншиж байна... (Түр хүлээнэ үү)';
+  if (type === 'marketing') document.getElementById('ai-marketing-res').style.display='block';
+  try {
+    let body = {};
+    if (type === 'marketing') body = {target: document.getElementById('ai-mk-target').value, goal: document.getElementById('ai-mk-goal').value};
+    const r=await fetch(API+'/api/v1/ai/automation/'+type, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(d.success) {
+      if(type==='marketing') {
+        const c = d.data.campaign;
+        document.getElementById('ai-marketing-res').innerHTML = `<b>Subject:</b> ${c.subject}<br><b>Discount:</b> ${c.discountPercent}%<br><br>${c.body.replace(/\n/g, '<br>')}`;
+      } else {
+        document.getElementById('ai-'+type+'-res').innerHTML = d.data.analysis.replace(/\n/g, '<br>');
+        if(type==='orders') showT(`Хүлээгдэж буй захиалгуудаас ${d.data.stats.autoProcessed} савлагдах руу автоматаар шилжлээ.`);
+      }
+    } else {
+      document.getElementById('ai-'+type+'-res').textContent = 'Алдаа гарлаа.';
+    }
+  } catch(err) { document.getElementById('ai-'+type+'-res').textContent = 'Сүлжээний алдаа.'; showT('Сүлжээний алдаа'); }
+}
+
+let ALL_ORDERS = [];
+async function loadOrders() {
+  try {
+    const r=await fetch(API+'/api/v1/orders'); const d=await r.json(); const tb = document.getElementById('otbody');
+    if(d.success && d.data.length) {
+      ALL_ORDERS = d.data;
+      tb.innerHTML = ALL_ORDERS.map(o=>`<tr><td style="color:var(--dim);font-size:13px">${new Date(o.createdAt).toLocaleString()}</td><td style="font-weight:500">${o.shippingAddress?.name || 'Систем зочин'}</td><td style="font-size:13px;max-width:160px;text-overflow:ellipsis;white-space:nowrap;overflow:hidden">${o.items?.[0]?.productName || 'Бараа'}</td><td style="font-weight:600;font-family:monospace">₮${(o.grandTotal||o.subtotal||0).toLocaleString()}</td><td><div style="background:${o.status==='DELIVERED'?'#dcfce7':o.status==='CANCELLED'?'#fee2e2':'#fef3c7'};color:${o.status==='DELIVERED'?'#166534':o.status==='CANCELLED'?'#991b1b':'#d97706'};padding:4px 8px;border-radius:4px;font-size:12px;font-weight:600;display:inline-block;margin-bottom:4px">${o.status}</div><div style="font-size:11px;color:var(--dim);white-space:nowrap">${o.trackingNumber?('Трак: '+o.trackingNumber):'Кодгүй'}</div><br><span style="font-size:10px;color:${o.paymentStatus==='partially_refunded'?'#ef4444':'#16a34a'}">Төлбөр: ${o.paymentStatus}</span></td><td><button class="btn-ghost" onclick="printInvoice('${o.id}')">🖨️ Хэвлэх</button> <button class="btn-ghost" onclick="openTrackM('${o.id}', '${o.status}', '${o.trackingNumber||''}')" style="background:var(--smoke);color:var(--bone)">Төлөв</button> <button class="btn-ghost del-btn" onclick="refundOrder('${o.id}')">Буцаалт (Refund)</button></td></tr>`).join('');
+    } else tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--dim);padding:40px">Захиалга хоосон байна.</td></tr>';
+  } catch{}
+}
+function printInvoice(id) {
+  const o = ALL_ORDERS.find(x => x.id === id); if(!o) return;
+  const items = o.orderItems || o.items || [];
+  const html = `<div style="font-family:sans-serif;padding:40px;max-width:800px;margin:0 auto;color:#000;background:#fff;min-height:100vh"><div style="display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:20px;margin-bottom:20px"><div><h1 style="margin:0">НЭХЭМЖЛЭХ (INVOICE)</h1><div style="color:#666;margin-top:8px">Захиалгын дугаар: ${o.orderNumber || o.id.split('-')[0].toUpperCase()}</div><div style="color:#666;margin-top:4px">Огноо: ${new Date(o.createdAt).toLocaleDateString()}</div></div><div style="text-align:right"><img src="https://chart.googleapis.com/chart?chs=100x100&cht=qr&chl=${o.id}" style="border:1px solid #ccc;padding:4px;border-radius:4px" alt="QR Code"></div></div><div style="display:flex;justify-content:space-between;margin-bottom:30px;font-size:14px"><div><b>Худалдан авагч / Хүлээн авагч:</b><br>${o.shippingAddress?.name||'Зочин'}</div><div style="text-align:right"><b>WEBSHOP ХХК</b><br>Улаанбаатар хот<br>Утас: 7000-0000<br>И-мэйл: info@webshop.mn</div></div><table style="width:100%;border-collapse:collapse;margin-bottom:30px;font-size:14px"><tr style="background:#f4f4f5;border-bottom:2px solid #000"><th style="padding:12px;text-align:left">Барааны нэр</th><th style="padding:12px;text-align:right">Тоо ширхэг</th><th style="padding:12px;text-align:right">Нэгжийн үнэ</th><th style="padding:12px;text-align:right">Нийт үнэ</th></tr>${items.map(i=>`<tr><td style="padding:12px;border-bottom:1px solid #eee">${i.product?.name || i.productName || 'Бараа'}</td><td style="padding:12px;text-align:right;border-bottom:1px solid #eee">${i.quantity}</td><td style="padding:12px;text-align:right;border-bottom:1px solid #eee">₮${(i.unitPrice||0).toLocaleString()}</td><td style="padding:12px;text-align:right;border-bottom:1px solid #eee">₮${(i.totalPrice||0).toLocaleString()}</td></tr>`).join('')}</table><div style="text-align:right;font-size:20px"><b>НИЙТ ТӨЛӨХ ДҮН: ₮${(o.grandTotal||o.subtotal||0).toLocaleString()}</b></div><div style="margin-top:50px;text-align:center;color:#666;font-size:12px;border-top:1px dashed #ccc;padding-top:20px">Биднийг сонгон үйлчлүүлсэнд баярлалаа! Үүнийг хэвлэж баримтжуулан хадгална уу.</div></div>`;
+  document.getElementById('print-area').innerHTML = html;
+  document.getElementById('print-area').style.display = 'block';
+  window.print();
+  document.getElementById('print-area').style.display = 'none';
+}
+async function refundOrder(id) {
+  const amt = prompt('Буцаалт хийх үнийн дүн (₮):');
+  if(!amt) return;
+  const reason = prompt('Буцаалтын шалтгаан:');
+  await fetch(API+'/api/v1/orders/'+id+'/refund', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:Number(amt), reason:reason||''})});
+  showT('Хэсэгчилсэн буцаалт амжилттай бүртгэгдлээ!');
+  loadOrders();
+}
+async function loadStats(){ try{const r=await fetch(API+'/api/v1/admin/stats');const d=await r.json();if(d.success){document.getElementById('st-rev').textContent='₮'+(d.data.revenue||0).toLocaleString();document.getElementById('st-ord').textContent=d.data.orders||0;}}catch{} }
+
+// FUNNEL
+async function loadFunnel() {
+  try {
+    const r=await fetch(API+'/api/v1/admin/funnel'); const d=await r.json();
+    if(d.success) {
+      document.getElementById('fnl-box').innerHTML = `
+        <div style="flex:1;background:var(--bg);padding:16px;border-radius:8px"><h2>${d.data.visitors}</h2><div style="color:var(--dim);font-size:12px">Хуудас үзсэн</div></div>
+        <div style="flex:1;background:var(--bg);padding:16px;border-radius:8px"><h2>${d.data.carts}</h2><div style="color:var(--dim);font-size:12px">Сагсалсан</div></div>
+        <div style="flex:1;background:var(--bg);padding:16px;border-radius:8px"><h2>${d.data.checkouts}</h2><div style="color:var(--dim);font-size:12px">Төлөхөөр орсон</div></div>
+        <div style="flex:1;background:#dcfce7;color:#166534;padding:16px;border-radius:8px"><h2>${d.data.conversions}</h2><div style="font-size:12px;font-weight:600">Амжилттай Захиалсан</div></div>
+      `;
+    }
+  } catch{}
+}
+async function sendInvoice(id) { await fetch(API+'/api/v1/orders/'+id+'/invoice', {method:'POST'}); showT('Хэрэглэгчийн гар утас руу QPay холбоос бүхий нэхэмжлэх амжилттай илгээгдлээ! 📩'); }
+
+// ABANDONED CARTS
+async function loadAband() {
+  try {
+    const r=await fetch(API+'/api/v1/abandoned-carts'); const d=await r.json(); const tb=document.getElementById('atbody');
+    if(d.success && d.data.length) {
+      tb.innerHTML = d.data.map(c=>`<tr><td>${new Date(c.updatedAt).toLocaleString()}</td><td style="font-weight:600;color:var(--dim)">Орхигдсон (Идэвхтэй)</td><td>${c.items.length} бараа</td><td style="font-weight:600;font-family:monospace">₮${c.items.reduce((s,i)=>s+i.totalPrice,0).toLocaleString()}</td><td><button class="btn-ghost" style="color:#d97706;background:#fef3c7" onclick="sendRecoveryMail('${c.id}')">Урамшууллын санал илгээх 📩</button></td></tr>`).join('');
+    } else tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--dim);padding:40px">Орхигдсон сагс алга байна. Борлуулалт сайн байна!</td></tr>';
+  } catch{}
+}
+async function sendRecoveryMail(id) { showT('Урамшууллын и-мэйл хэрэглэгч рүү амжилттай илгээгдлээ! 🚀'); }
+
+// MARKETING
+async function sendMarketing() {
+  const tgt = document.getElementById('mk-target').value;
+  const sbj = document.getElementById('mk-sbj').value.trim();
+  const t = document.getElementById('mk-body').value.trim();
+  if(!t) return showT('Агуулгаа бичнэ үү!');
+  await fetch(API+'/api/v1/marketing', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:tgt, subject:sbj, body:t})}); 
+  showT(`✨ ${tgt.toUpperCase()} сегмент рүү сурталчилгаа пуужин мэт хөөрлөө!`);
+  document.getElementById('mk-body').value=''; document.getElementById('mk-sbj').value='';
+}
+
+// MATRIX VARIANTS
+async function openVarM(id) {
+  activeVariantProductId = id; document.getElementById('mo-var').classList.add('on');
+  document.getElementById('v-name').value=''; document.getElementById('v-sku').value=''; document.getElementById('v-price').value=''; document.getElementById('v-stock').value='';
+  loadVars();
+}
+async function loadVars() {
+  try {
+    const r=await fetch(API+'/api/v1/products/'+activeVariantProductId+'/variants'); const d=await r.json();
+    document.getElementById('vtbody').innerHTML = d.data.map(v=>`<tr><td style="font-weight:600">${v.name}</td><td>${v.sku}</td><td>₮${v.price}</td><td><span style="font-weight:600;color:#16a34a">${v.stock} ширхэг</span></td><td><button class="btn-ghost del-btn" onclick="delVar('${v.id}')">Устгах</button></td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--dim);padding:20px">Мэтрикс хувилбар хоосон байна.</td></tr>';
+  } catch{}
+}
+async function saveVar() {
+  const p = {name: document.getElementById('v-name').value, sku: document.getElementById('v-sku').value, price: document.getElementById('v-price').value, stock: document.getElementById('v-stock').value};
+  if(!p.name) return showT('Нэрээ бичнэ үү');
+  await fetch(API+'/api/v1/products/'+activeVariantProductId+'/variants', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}); showT('Мэтрикс хувилбар нэмэгдлээ!'); loadVars();
+}
+async function delVar(id) { await fetch(API+'/api/v1/products/variants/'+id, {method:'DELETE'}); loadVars(); }
+
+// SUPPLIERS
+let editingSup = null;
+async function loadSup() { try{const r=await fetch(API+'/api/v1/suppliers');const d=await r.json(); ALL_SUP = d.data; document.getElementById('stbody').innerHTML=d.data.map(c=>`<tr><td style="font-weight:600">${c.name}</td><td>${c.phone}</td><td><span style="color:#16a34a;font-weight:600">${c.status}</span></td><td><button class="btn-ghost" onclick="editSup('${c.id}')">Засах</button><button class="btn-ghost del-btn" onclick="delSup('${c.id}')">Устгах</button></td></tr>`).join('')}catch{}}
+function openSupM() { editingSup=null; document.getElementById('sup-title').textContent='Нийлүүлэгч нэмэх'; document.getElementById('sup-n').value=''; document.getElementById('sup-p').value=''; document.getElementById('sup-s').value=''; document.getElementById('mo-sup').classList.add('on'); }
+function editSup(id) { const s = ALL_SUP.find(x=>x.id===id); if(s) { editingSup=id; document.getElementById('sup-title').textContent='Нийлүүлэгч засах'; document.getElementById('sup-n').value=s.name; document.getElementById('sup-p').value=s.phone; document.getElementById('sup-s').value=s.status; document.getElementById('mo-sup').classList.add('on'); } }
+async function saveSup() { const payload = {name: document.getElementById('sup-n').value, phone: document.getElementById('sup-p').value, status: document.getElementById('sup-s').value}; if(editingSup) await fetch(API+'/api/v1/suppliers/'+editingSup, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); else await fetch(API+'/api/v1/suppliers', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); document.getElementById('mo-sup').classList.remove('on'); showT('Амжилттай!'); loadSup(); }
+async function delSup(id) { await fetch(API+'/api/v1/suppliers/'+id,{method:'DELETE'}); showT('Устгагдлаа'); loadSup(); }
+
+// CUSTOMERS
+let editingCus = null;
+async function loadCus(){ try{const r=await fetch(API+'/api/v1/customers');const d=await r.json();ALL_CUS=d.data; document.getElementById('ctbody').innerHTML=d.data.map(c=>`<tr><td>${new Date(c.createdAt).toLocaleDateString()}</td><td style="font-weight:600">${c.firstName} ${c.lastName||''}</td><td>${c.email}</td><td><span style="background:${c.segment.includes('VIP')?'#fef08a':'#e4e4e7'};color:${c.segment.includes('VIP')?'#854d0e':'#3f3f46'};padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600">${c.segment}</span><br><span style="font-size:11px;color:var(--dim)">₮${(c.ltv||0).toLocaleString()} (Үлдэгдэл: <b style="color:#eab308">₮${(c.wallet||0).toLocaleString()}</b>)</span></td><td><button class="btn-ghost" onclick="editCus('${c.id}')" style="background:var(--smoke);color:var(--bone)">Хавтас (CRM)</button></td></tr>`).join('')}catch{}}
+function editCus(id) { const c = ALL_CUS.find(x=>x.id===id); if(c) { editingCus=id; document.getElementById('ce-fn').value=c.firstName; document.getElementById('ce-ln').value=c.lastName||''; document.getElementById('ce-em').value=c.email; document.getElementById('mo-cus-edit').classList.add('on'); document.getElementById('ce-note-input').value=''; document.getElementById('ce-wallet-amt').value=''; loadCusNotes(id); } }
+async function saveCus() { const payload = {firstName: document.getElementById('ce-fn').value, lastName: document.getElementById('ce-ln').value, email: document.getElementById('ce-em').value}; await fetch(API+'/api/v1/customers/'+editingCus, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); showT('Мэдээлэл шинэчлэгдлээ!'); loadCus(); }
+async function loadCusNotes(id) { try { const r=await fetch(API+'/api/v1/customers/'+id+'/notes'); const d=await r.json(); document.getElementById('ce-notes-list').innerHTML=d.data.map(n=>`<div style="background:var(--surface);padding:12px;border-radius:6px;border:1px solid var(--smoke)"><div style="font-size:12px;color:var(--bone);line-height:1.4">${n.details?.note||'-'}</div><div style="font-size:10px;color:var(--dim);margin-top:6px;text-align:right">${new Date(n.createdAt).toLocaleString()}</div></div>`).join(''); } catch{} }
+async function saveCusNote() { const v=document.getElementById('ce-note-input').value.trim(); if(!v)return; await fetch(API+'/api/v1/customers/'+editingCus+'/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({note:v})}); document.getElementById('ce-note-input').value=''; loadCusNotes(editingCus); showT('Тэмдэглэл хадгалагдлаа'); }
+async function addWallet() { const w=document.getElementById('ce-wallet-amt').value; if(!w)return; await fetch(API+'/api/v1/customers/'+editingCus+'/wallet',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:w,reason:'Admin Gift'})}); document.getElementById('ce-wallet-amt').value=''; showT('Wallet цэнэглэгдлээ!'); loadCus(); }
+
+// COUPONS
+let editingCp = null;
+async function loadCp() { try{const r=await fetch(API+'/api/v1/coupons');const d=await r.json();ALL_CP=d.data;document.getElementById('cptbody').innerHTML=d.data.map(c=>`<tr><td style="font-weight:600">${c.code}</td><td>${c.discountValue}%</td><td><button class="btn-ghost" onclick="editCp('${c.id}')">Засах</button><button class="btn-ghost del-btn" onclick="delCp('${c.id}')">Устгах</button></td></tr>`).join('')}catch{}}
+function openCpM() { editingCp=null; document.getElementById('cp-title').textContent='Урамшуулал үүсгэх'; document.getElementById('cp-code').value=''; document.getElementById('cp-val').value=''; document.getElementById('mo-cp').classList.add('on'); }
+function editCp(id) { const c = ALL_CP.find(x=>x.id===id); if(c) { editingCp=id; document.getElementById('cp-title').textContent='Урамшуулал засах'; document.getElementById('cp-code').value=c.code; document.getElementById('cp-val').value=c.discountValue; document.getElementById('mo-cp').classList.add('on'); } }
+async function saveCp() { const payload = {code: document.getElementById('cp-code').value.trim(), discountValue: document.getElementById('cp-val').value}; if(editingCp) await fetch(API+'/api/v1/coupons/'+editingCp, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); else await fetch(API+'/api/v1/coupons', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); document.getElementById('mo-cp').classList.remove('on'); showT('Амжилттай хадгаллаа!'); loadCp(); }
+async function delCp(id) { await fetch(API+'/api/v1/coupons/'+id,{method:'DELETE'}); showT('Устгагдлаа'); loadCp(); }
+
+// MANUAL ORDER
+function openOM() { document.getElementById('mo-cus').value=''; document.getElementById('mo-price').value=''; document.getElementById('mo-order').classList.add('on'); }
+async function saveOM() { const cus=document.getElementById('mo-cus').value.trim(); const sel=document.getElementById('mo-prod'); const pid=sel.value; const ppr=document.getElementById('mo-price').value||sel.options[sel.selectedIndex].dataset.price; await fetch(API+'/api/v1/orders/admin', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customerName:cus||'Үл таних зочин', productId:pid, price:ppr})}); showT('Захиалга нэмэгдэж Нэхэмжлэх үүслээ!'); document.getElementById('mo-order').classList.remove('on'); loadOrders(); loadStats(); }
+
+// TRACKING
+function openTrackM(id, st, code) { editingTrackId = id; document.getElementById('mo-t-status').value = st; document.getElementById('mo-t-code').value = code || ''; document.getElementById('mo-track').classList.add('on'); }
+async function saveTrack() { await fetch(API+'/api/v1/orders/'+editingTrackId+'/tracking', {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:document.getElementById('mo-t-status').value, trackingNumber: document.getElementById('mo-t-code').value})}); showT('Хүргэлтийн мэдээлэл хадгалагдлаа!'); document.getElementById('mo-track').classList.remove('on'); loadOrders(); }
+async function setOs(id, st) { if(confirm('Захиалгыг цуцлах уу?')) { await fetch(API+'/api/v1/orders/'+id+'/tracking', {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:st})}); showT('Төлөв шинэчлэгдлээ!'); loadOrders(); } }
+
+// SETTINGS & AI
+function loadSettings(){ document.getElementById('set-name').value=localStorage.getItem('ws_store_name')||'WEBSHOP'; document.getElementById('set-ai').checked=localStorage.getItem('ws_ai_off')!=='true'; }
+function saveSettings(){ localStorage.setItem('ws_store_name', document.getElementById('set-name').value); if(!document.getElementById('set-ai').checked) localStorage.setItem('ws_ai_off', 'true'); else localStorage.removeItem('ws_ai_off'); showT('Тохиргоо хадгалагдлаа!'); }
+async function aiInsight(){ showT('📊 AI судалж байна...'); try{const r=await fetch(API+'/api/v1/ai/insights');const d=await r.json();if(d.success) alert('✨ AI Зах Зээлийн Зөвлөмж:\\n\\n'+d.data.insight);}catch{} }
+
+// PRODUCTS
+async function loadCats() { try { const r=await fetch(API+'/api/v1/categories'); const d=await r.json(); if(d.success) document.getElementById('p-cat').innerHTML = '<option value="">Ерөнхий</option>' + d.data.map(c=>`<option value="${c.id}">${c.name}</option>`).join(''); } catch{} }
+function tickAll(el) { document.querySelectorAll('.chk-prod').forEach(c => c.checked = el.checked); }
+async function bulkDelP() { 
+  const ids = Array.from(document.querySelectorAll('.chk-prod:checked')).map(c => c.value);
+  if(!ids.length) return showT('Устгах бараануудаа сонгоно уу!');
+  if(confirm(ids.length + ' ширхэг барааг бүрмөсөн устгах уу?')){ await fetch(API+'/api/v1/products/bulk-delete', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})}); showT('Амжилттай устгагдлаа'); loadProds(); document.getElementById('chk-all').checked=false; }
+}
+function openM(isE=false){ if(!isE){editingId=null;document.getElementById('m-title').textContent='Шинэ бараа бүртгэх';['p-name','p-price','p-cost','p-sale','p-desc','p-tags','p-img'].forEach(x=>document.getElementById(x).value='');updatePv();} document.getElementById('mo').classList.add('on'); }
+function closeM(){ document.getElementById('mo').classList.remove('on'); }
+function updatePv(){ const v=document.getElementById('p-img').value; const pv=document.getElementById('p-pv'); if(v){pv.src=v;pv.style.display='block'}else pv.style.display='none'; }
+function editP(id){ const p=ALL_PRODS.find(x=>x.id===id); if(p){editingId=id;document.getElementById('m-title').textContent='Бараа засах';document.getElementById('p-name').value=p.name||'';document.getElementById('p-price').value=p.basePrice||'';document.getElementById('p-cost').value=p.attributes?.costPrice||'';document.getElementById('p-sale').value=p.attributes?.salePrice||'';document.getElementById('p-desc').value=p.description||'';document.getElementById('p-cat').value=p.categoryId||'';document.getElementById('p-img').value=p.media?.[0]?.url||'';updatePv();openM(true);} }
+async function autoGen(){ const n=document.getElementById('p-name').value.trim(); if(!n)return showT('НЭР үү?'); const b=document.getElementById('aibtn'); b.textContent='Бодож байна...'; try{const r=await fetch(API+'/api/v1/ai/generate-product',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})});const d=await r.json();if(d.success){document.getElementById('p-desc').value=d.data.description;document.getElementById('p-tags').value=d.data.seoTags;if(!document.getElementById('p-price').value)document.getElementById('p-price').value=d.data.pricePrediction;showT('AI зохиолоо! ✨')}}catch{} b.textContent='✨ AI Auto-Generate'; }
+async function saveP(){ const data={name:document.getElementById('p-name').value.trim(),basePrice:document.getElementById('p-price').value,costPrice:document.getElementById('p-cost').value,salePrice:document.getElementById('p-sale').value,description:document.getElementById('p-desc').value,categoryId:document.getElementById('p-cat').value||undefined,images:document.getElementById('p-img').value?[document.getElementById('p-img').value]:[]}; if(!data.name||!data.basePrice)return showT('Нэр, Үнэ!'); if(editingId)await fetch(API+'/api/v1/products/'+editingId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); else await fetch(API+'/api/v1/products',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); closeM(); loadProds(); showT('Амжилттай хадгаллаа!'); }
+async function delP(id){ if(confirm('Устгах уу?')){await fetch(API+'/api/v1/products/'+id,{method:'DELETE'});showT('Устгагдлаа');loadProds();} }
+
+// INITIALIZATION
+let revChartInstance = null;
+function initChart() {
+  if(revChartInstance) return; const ctx=document.getElementById('revChart'); if(!ctx)return;
+  revChartInstance = new Chart(ctx, { type:'line', data:{labels:['Дав','Мяг','Лха','Пүр','Баа','Бям','Ням'], datasets:[{label:'Борлуулалт (₮)', data:[2500000,1800000,3200000,4100000,2900000,5600000,1200000],borderColor:'#16a34a',backgroundColor:'rgba(22, 163, 74, 0.1)',tension:0.4,fill:true}]}, options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}} });
+  new Chart(document.getElementById('catChart'), { type:'doughnut', data:{labels:['Утсаны гэр','Цэнэглэгч','Чихэвч','Бусад'], datasets:[{data:[45,25,20,10],backgroundColor:['#3b82f6','#10b981','#f59e0b','#ef4444']}]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right'}}} });
+  new Chart(document.getElementById('topChart'), { type:'bar', data:{labels:['iPhone 15','MacBook Pro','AirPods','Samsung S24','iPad Air'], datasets:[{label:'Зарагдсан тоо',data:[120,85,200,90,150],backgroundColor:'#8b5cf6'}]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}} });
+}
+function initApp() {
+  loadCats(); loadProds(); initChart();
+}
+// Boot checks
+if(!localStorage.getItem('ws_token')) { document.getElementById('login-screen').style.display = 'flex'; }
+else { initApp(); }
 </script>
 </body>
 </html>
