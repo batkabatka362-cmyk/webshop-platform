@@ -154,8 +154,20 @@ app.get(`${BASE}/storefront/live-feed`, async (req, res) => {
   } catch(err) { res.json({ success: false, data: [] }); }
 });
 
+// --- IDEMPOTENCY CACHE ---
+const idempotencyCache = new Map<string, number>();
+const RECENT_ORDER_WINDOW_MS = 10000;
+
 app.post(`${BASE}/storefront/checkout`, async (req, res) => {
   try {
+    const iKey = req.headers['idempotency-key'] as string;
+    if (iKey) {
+      if (idempotencyCache.has(iKey)) return res.status(409).json({ success: false, message: 'Давхардсан хүсэлт' });
+      idempotencyCache.set(iKey, Date.now());
+      // Cleanup old keys
+      for (const [k, v] of idempotencyCache.entries()) { if (Date.now() - v > 60000) idempotencyCache.delete(k); }
+    }
+
     const token = req.headers.authorization?.split(' ')[1];
     let customerId = null; let guestEmail = null;
     if(token) { 
@@ -217,12 +229,15 @@ app.post(`${BASE}/storefront/checkout`, async (req, res) => {
         }
       }
 
-      // 3. Coupon processing
+      // 3. Coupon processing (with maxUses bounds)
       let usedCouponId = null;
       if (couponCode) {
         const coupon = await tx.coupon.findUnique({ where: { code: couponCode } });
         if (!coupon || !coupon.active || calculatedSubtotal < coupon.minOrderAmount) {
           throw new Error('Купон хүчингүй эсвэл нөхцөл хангахгүй байна');
+        }
+        if (coupon.maxUses && coupon.usageCount >= coupon.maxUses) {
+          throw new Error('Купоны ашиглах хязгаар дууссан байна');
         }
         discountTotal += coupon.discountType === 'percentage' ? (calculatedSubtotal * (coupon.discountValue / 100)) : coupon.discountValue;
         usedCouponId = coupon.id;
@@ -282,6 +297,8 @@ app.post(`${BASE}/storefront/checkout`, async (req, res) => {
 
     res.json({ success: true, orderId: order.id, grandTotal: order.grandTotal });
   } catch (err: any) {
+    const iKey = req.headers['idempotency-key'] as string;
+    if (iKey) idempotencyCache.delete(iKey); // Release lock on failure
     console.error('[CHECKOUT VULNERABILITY PREVENTION]', err);
     res.status(400).json({ success: false, message: err.message || 'Захиалга үүсгэхэд алдаа гарлаа' });
   }
