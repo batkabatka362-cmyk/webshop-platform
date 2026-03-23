@@ -525,7 +525,7 @@ const origFetch = window.fetch.bind(window);
 window.fetch = async function(url, config) {
   if(!config) config = {};
   if(!config.headers) config.headers = {};
-  const t = localStorage.getItem('ws_token');
+  const t = localStorage.getItem('ws_admin_token');
   if(t) config.headers['Authorization'] = `Bearer ${t}`;
   return origFetch(url, config);
 };
@@ -537,7 +537,7 @@ async function doLogin() {
     const r = await origFetch(API+'/api/v1/auth/admin/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:e,password:p})});
     const d = await r.json();
     if(d.success) {
-      localStorage.setItem('ws_token', d.token);
+      localStorage.setItem('ws_admin_token', d.token);
       document.getElementById('login-screen').style.display='none';
       showT('Системд амжилттай нэвтэрлээ!');
       initApp();

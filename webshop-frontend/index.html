@@ -520,18 +520,17 @@ body.light-mode nav.s{background:rgba(255,255,255,.85)}
 .pa-btn:hover{border-color:#d4a843;color:#d4a843}
 
 /* Floating Action Buttons */
-.fab-group{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:12px;z-index:997}
-.fab-btn{width:48px;height:48px;border-radius:50%;border:none;cursor:pointer;font-size:18px;box-shadow:0 4px 16px rgba(0,0,0,.3);transition:all .3s;display:flex;align-items:center;justify-content:center}
+.fab-group{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:12px;z-index:1000}
+.fab-btn{width:48px;height:48px;border-radius:50%;border:none;cursor:pointer;font-size:18px;box-shadow:0 6px 20px rgba(0,0,0,0.4);transition:all .3s;display:flex;align-items:center;justify-content:center}
 .fab-btn:hover{transform:scale(1.15)}
 .fab-spin{background:linear-gradient(135deg,#ff3d00,#ff6b35);color:#fff}
 .fab-gift{background:linear-gradient(135deg,#d4a843,#f0d060);color:#1a1a1a}
-.fab-theme{background:var(--bone);color:var(--deep)}
+.fab-theme{background:var(--bone);color:var(--deep);border:1px solid var(--smoke2)}
 
 @media(max-width:768px){
-  .flash-grid{grid-template-columns:1fr!important}
-  .gc-amounts{grid-template-columns:repeat(2,1fr)}
-  .compare-grid{grid-template-columns:1fr}
-  .fab-group{bottom:16px;right:16px}
+  .voice-btn, nav #theme-btn{display:none!important}
+  .fab-group{bottom:100px;right:20px}
+  .fab-btn{width:56px;height:56px;font-size:22px}
 }
 </style>
 </head>
@@ -1166,7 +1165,7 @@ document.getElementById('ftabs').addEventListener('click',e=>{
 // ── CART — Backend API Connected ──
 let sessionId = localStorage.getItem('ws_session') || ('sess_'+Math.random().toString(36).slice(2));
 localStorage.setItem('ws_session', sessionId);
-let authToken = localStorage.getItem('ws_token') || '';
+let authToken = localStorage.getItem('ws_customer_token') || '';
 
 function apiHeaders(){
   const h = {'Content-Type':'application/json','X-Session-ID':sessionId};
@@ -1253,11 +1252,11 @@ async function doAuth(){
   try{
     const r=await fetch(API+'/api/v1/storefront/auth/'+authMode,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const d=await r.json();
-    if(d.success){ authToken=d.token; localStorage.setItem('ws_token',authToken); document.getElementById('cw-row').style.display='flex'; loadMe(); }
+    if(d.success){ authToken=d.token; localStorage.setItem('ws_customer_token',authToken); document.getElementById('cw-row').style.display='flex'; loadMe(); }
     else showT(d.message);
   }catch{}
 }
-function logOut(){ authToken=''; localStorage.removeItem('ws_token'); document.getElementById('cw-row').style.display='none'; document.getElementById('auth-logged').style.display='none'; document.getElementById('auth-unlogged').style.display='block'; }
+function logOut(){ authToken=''; localStorage.removeItem('ws_customer_token'); document.getElementById('cw-row').style.display='none'; document.getElementById('auth-logged').style.display='none'; document.getElementById('auth-unlogged').style.display='block'; }
 async function loadMe(){
   document.getElementById('auth-unlogged').style.display='none'; document.getElementById('auth-logged').style.display='block'; document.getElementById('cw-row').style.display='flex';
   try{
@@ -1316,9 +1315,15 @@ document.getElementById('si').addEventListener('keydown',async e=>{
         return;
       }
     }catch{}
-    // Fallback: local filter
+    // Fallback: local filter (if DB query failed or no real products exist yet)
     const list=DEMO.filter(p=>p.name.toLowerCase().includes(q.toLowerCase()));
-    renderProds(list.length?list:DEMO);
+    if(list.length) {
+      renderProds(list);
+      showT(`Локал санах ойгоос ${list.length} бараа олдлоо`);
+    } else {
+      renderProds([]);
+      showT('Ийм нэртэй бараа олдсонгүй');
+    }
     go('products');
   }
 });
@@ -1620,14 +1625,16 @@ function toggleTheme() {
   const isLight = document.body.classList.contains('light-mode');
   localStorage.setItem('ws_theme', isLight ? 'light' : 'dark');
   const icon = isLight ? '☀️' : '🌙';
-  document.getElementById('theme-btn').textContent = icon;
-  document.getElementById('fab-theme').textContent = icon;
+  const tb = document.getElementById('theme-btn'); if(tb) tb.textContent = icon;
+  const ft = document.getElementById('fab-theme'); if(ft) ft.textContent = icon;
 }
 // Restore theme
 if(localStorage.getItem('ws_theme') === 'light') {
   document.body.classList.add('light-mode');
-  document.getElementById('theme-btn').textContent = '☀️';
-  document.getElementById('fab-theme').textContent = '☀️';
+  window.addEventListener('DOMContentLoaded', () => {
+    const tb = document.getElementById('theme-btn'); if(tb) tb.textContent = '☀️';
+    const ft = document.getElementById('fab-theme'); if(ft) ft.textContent = '☀️';
+  });
 }
 
 // 🗣️ VOICE SEARCH
