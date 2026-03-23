@@ -15,6 +15,33 @@ import morgan from 'morgan'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
+import nodemailer from 'nodemailer'
+
+// ─── Mailer Utility ───────────────────────────
+const mailer = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.ethereal.email',
+  port: Number(process.env.SMTP_PORT) || 587,
+  auth: { user: process.env.SMTP_USER || 'test', pass: process.env.SMTP_PASS || 'test' }
+});
+
+async function sendOrderConfirmationAsync(order: any) {
+  try {
+    const to = order.guestEmail; // order.customer?.email could be used if joined, but guestEmail captures both if synced properly or we rely on it directly.
+    if(!to) return;
+    const html = `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#2c3e50;padding:20px;border:1px solid #eaeaea;border-radius:8px">
+        <h2 style="color:#d4a843;border-bottom:1px solid #eaeaea;padding-bottom:10px">🛒 Захиалга баталгаажлаа</h2>
+        <p>Сайн байна уу? Таны <strong>${order.orderNumber}</strong> дугаартай захиалгын төлбөр амжилттай төлөгдлөө.</p>
+        <div style="background:#f9f9f9;padding:15px;border-radius:8px;margin:20px 0">
+          <p style="margin:5px 0"><strong>💰 Төлсөн дүн:</strong> ₮${order.grandTotal.toLocaleString()}</p>
+          <p style="margin:5px 0"><strong>📅 Огноо:</strong> ${new Date(order.placedAt).toLocaleString()}</p>
+        </div>
+        <p style="font-size:14px;color:#666">Бид таны барааг тун удахгүй хүргэж өгөх болно. Биднийг сонгосонд баярлалаа!</p>
+      </div>`;
+    await mailer.sendMail({ from: '"WEBSHOP Team" <noreply@webshop.mn>', to, subject: `Таны захиалга баталгаажлаа: ${order.orderNumber}`, html });
+    console.log(`[EMAIL] Order confirmation sent to ${to}`);
+  } catch (err: any) { console.error(`[EMAIL ERROR] Confirmation failed:`, err.message); }
+}
 
 // ─── Global Prisma Instance ───────────────────
 export const prisma = new PrismaClient({
@@ -1501,11 +1528,14 @@ app.post(`${BASE}/storefront/webhooks/qpay`, async (req, res) => {
 
     const { orderId, payment_status } = req.body;
     if (payment_status === 'PAID') {
-      await prisma.order.update({
+      const updatedOrder = await prisma.order.update({
         where: { id: orderId },
         data: { paymentStatus: 'paid', status: 'processing' }
       });
       console.log(`[SECURITY] Order ${orderId} successfully processed via QPay Webhook.`);
+      
+      // Fire and forget Email Notification
+      sendOrderConfirmationAsync(updatedOrder).catch(()=>{});
     }
     res.json({ success: true });
   } catch(err) {
