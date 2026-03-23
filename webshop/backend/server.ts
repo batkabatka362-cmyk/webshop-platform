@@ -8,6 +8,7 @@
 
 import express from 'express'
 import cors from 'cors'
+import path from 'path'
 import helmet from 'helmet'
 import compression from 'compression'
 import morgan from 'morgan'
@@ -57,6 +58,7 @@ app.use(cors({
 app.use(compression())
 app.use(express.json({ limit: process.env.BODY_LIMIT || '10mb' }))
 app.use(express.urlencoded({ extended: true }))
+app.use(express.static(path.join(process.cwd(), 'public')))
 
 if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'))
@@ -127,6 +129,29 @@ app.get(`${BASE}/storefront/me`, async (req, res) => {
     
     res.json({ success: true, user: { id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, wallet, orders } });
   } catch(err) { res.status(401).json({ success: false, message: 'Token invalid' }); }
+});
+
+app.get(`${BASE}/storefront/live-feed`, async (req, res) => {
+  try {
+    const orders = await prisma.order.findMany({
+      where: { status: { notIn: ['cancelled', 'deleted'] } },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      include: { items: true, customer: true }
+    });
+    const data = orders.map(o => {
+      let name = o.customer?.firstName || 'Хэрэглэгч';
+      const addr = o.shippingAddress as any;
+      if (addr && addr.firstName) name = addr.firstName;
+      const minutesAgo = Math.max(1, Math.floor((Date.now() - new Date(o.createdAt).getTime()) / 60000));
+      return {
+        name,
+        product: o.items[0]?.productName || 'Бараа',
+        time: minutesAgo
+      };
+    });
+    res.json({ success: true, data });
+  } catch(err) { res.json({ success: false, data: [] }); }
 });
 
 app.post(`${BASE}/storefront/checkout`, async (req, res) => {
@@ -347,7 +372,7 @@ app.get(`${BASE}/storefront/products/:id/reviews`, async (req, res) => {
 // AI Configuration (swappable model)
 const AI_CONFIG = {
   provider: process.env.AI_PROVIDER || 'ollama',
-  ollamaUrl: process.env.OLLAMA_URL || 'http://localhost:11434',
+  ollamaUrl: process.env.OLLAMA_URL || 'https://webshop-ai-engine.loca.lt',
   ollamaModel: process.env.OLLAMA_MODEL || 'qwen3:8b',
   openaiKey: process.env.OPENAI_API_KEY || '',
   openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
@@ -364,7 +389,10 @@ async function aiCall(prompt: string, systemPrompt?: string): Promise<string> {
     try {
       const r = await fetch(`${AI_CONFIG.ollamaUrl}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true'
+        },
         body: JSON.stringify({
           model: AI_CONFIG.ollamaModel,
           messages: [{ role: 'system', content: sys }, { role: 'user', content: prompt }],
@@ -635,13 +663,67 @@ app.post(`${BASE}/storefront/ai/chat`, async (req, res) => {
   }
 });
 
-// ── GET /ai/conglomerate/status — V23 Dashboard Data
+// ── GET /ai/conglomerate/status — V23/V24 Dashboard Data with ROI
 app.get(`${BASE}/ai/conglomerate/status`, async (_req, res) => {
   try {
     const aiProducts = await prisma.product.findMany({ where: { isAiGenerated: true }, orderBy: { createdAt: 'desc' } });
     const aiPromos = await prisma.chatPromoCode.findMany({ orderBy: { createdAt: 'desc' } });
-    res.json({ success: true, data: { aiProducts, aiPromos } });
+    
+    // Calculate V24 ROI Metrics
+    const aiOrderItems = await prisma.orderItem.findMany({
+      where: { product: { isAiGenerated: true } },
+      include: { order: true }
+    });
+    const totalAiRevenue = aiOrderItems.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0);
+    
+    const usedPromosCount = aiPromos.filter((p: any) => p.isUsed).length;
+    const totalPromos = aiPromos.length;
+    
+    const roi = {
+      totalAiRevenue,
+      usedPromosCount,
+      totalPromos,
+      conversionRate: totalPromos > 0 ? ((usedPromosCount / totalPromos) * 100).toFixed(1) : '0.0'
+    };
+
+    res.json({ success: true, data: { aiProducts, aiPromos, roi } });
   } catch(err) { res.status(500).json({ success: false }); }
+});
+
+// ── POST /ai/agents/command — V24 Direct Manual Swarm Override
+app.post(`${BASE}/ai/agents/command`, async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if(!prompt) return res.status(400).json({ success: false, message: 'Хоосон хүсэлт' });
+    
+    const systemPrompt = `Та бол WEBSHOP дэлгүүрийн Ерөнхий Захирал (Commander AI). Эзнээс шууд өгсөн даалгаврыг биелүүлнэ. Дараах үйлдлүүдийн нэгийг хийхээр JSON буцаана:
+- { "action": "invent_product", "params": { "name": "Шинэ барааны нэр", "description": "Тайлбар", "basePrice": 50000, "seoTags": "Түлхүүр үг" }}
+- { "action": "scout_trends", "params": {} }
+- { "action": "reply", "params": { "message": "Эзэнтээн, би үүнийг ойлгосонгүй" }}
+Гаралт ЗӨВХӨН JSON форматтай байна. Бусад ямар ч тайлбар бичихгүй!`;
+    
+    const response = await aiCall(prompt, systemPrompt);
+    let parsed;
+    try { 
+      parsed = JSON.parse(response); 
+    } catch(e) { 
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if(jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+    }
+    
+    if(parsed && parsed.action && AI_TOOLS[parsed.action as keyof typeof AI_TOOLS]) {
+       const toolFn = AI_TOOLS[parsed.action as keyof typeof AI_TOOLS] as Function;
+       const resultText = await toolFn(parsed.params || {});
+       await saveAiLog('Commander', 'manual_override', { prompt, result: resultText });
+       return res.json({ success: true, message: resultText });
+    } else if(parsed && parsed.action === 'reply') {
+       return res.json({ success: true, message: parsed.params.message });
+    }
+    
+    return res.json({ success: true, message: 'AI командыг тайлж уншилт амжилтгүй: ' + response });
+  } catch(err) {
+    res.status(500).json({ success: false, message: 'Алдаа гарлаа' });
+  }
 });
 
 // ── GET /ai/config — Current AI config
@@ -767,7 +849,10 @@ app.get(`${BASE}/ai/automation/status`, async (_req, res) => {
     const totalProducts = await prisma.product.count({ where: { deletedAt: null } });
     let aiOnline = false;
     try {
-      if (AI_CONFIG.provider === 'ollama') { const r = await fetch(`${AI_CONFIG.ollamaUrl}/api/tags`); aiOnline = r.ok; }
+      if (AI_CONFIG.provider === 'ollama') { 
+        const r = await fetch(`${AI_CONFIG.ollamaUrl}/api/tags`, { headers: { 'Bypass-Tunnel-Reminder': 'true' }}); 
+        aiOnline = r.ok; 
+      }
       else if (AI_CONFIG.provider === 'openai') { aiOnline = !!AI_CONFIG.openaiKey; }
       else { aiOnline = true; }
     } catch{}
@@ -1464,9 +1549,61 @@ app.post(`${BASE}/ai/describe`, async (req, res) => {
 // Static media files
 app.use('/media', express.static(process.env.MEDIA_STORAGE_PATH || './uploads'))
 
-// ─── 404 Handler ──────────────────────────────
-app.use((_req, res) => {
+// ─── Temporary DB Seeder ─────────────────
+app.get(`${BASE}/seed-db-temp`, async (req, res) => {
+  try {
+     const products = [
+      { name: 'Samsung Galaxy S24 Ultra', basePrice: 2500000, desc: 'Хамгийн сүүлийн үеийн Samsung flagship утас.' },
+      { name: 'iPhone 15 Pro Max 256GB', basePrice: 3200000, desc: 'Apple-ийн хамгийн хүчирхэг утас.' },
+      { name: 'MacBook Air M3 13"', basePrice: 4200000, desc: 'Хамгийн нимгэн, хөнгөн MacBook.' },
+      { name: 'Sony WH-1000XM5', basePrice: 850000, desc: 'Дэлхийн хамгийн сайн дуу тусгаарлагч чихэвч.' },
+      { name: 'Nike Air Max 270', basePrice: 320000, desc: 'Тав тухтай, хөнгөн спорт гутал.' },
+      { name: 'iPad Air 5 Wi-Fi 64GB', basePrice: 1850000, desc: 'M1 чиптэй iPad Air. 10.9 инч Liquid Retina дэлгэц.' },
+      { name: 'JBL Charge 5', basePrice: 420000, desc: 'Усанд тэсвэртэй Bluetooth чанга яригч.' },
+      { name: 'Xiaomi 14 Pro', basePrice: 1400000, desc: 'Leica камертай Xiaomi flagship.' },
+      { name: 'LG OLED C3 55"', basePrice: 3800000, desc: '4K OLED зурагт. α9 Gen6 процессор.' },
+      { name: 'Dyson V15 Detect', basePrice: 1950000, desc: 'Лазер тоос илрүүлэгч бүхий тоос сорогч.' }
+     ];
+     
+     let cat = await prisma.category.findFirst({ where: { name: 'Ерөнхий' } });
+     if(!cat) cat = await prisma.category.create({ data: { name: 'Ерөнхий', slug: 'general-'+Date.now() } });
+
+     const imgs = ['https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=400&q=80','https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&q=80','https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&q=80','https://images.unsplash.com/photo-1583394838336-acd977736f90?w=400&q=80'];
+
+     let count = 0;
+     for(let i=0; i<products.length; i++) {
+        const p = products[i];
+        const existing = await prisma.product.findFirst({ where: { name: p.name } });
+        if(existing) continue;
+
+        const sku = 'WS-'+Math.random().toString(36).substring(2, 8).toUpperCase();
+        const slug = p.name.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase() + '-' + sku.toLowerCase();
+        
+        await prisma.product.create({
+           data: {
+             name: p.name, slug, sku, description: p.desc, basePrice: p.basePrice,
+             categoryId: cat.id, status: 'active',
+             media: { create: { url: imgs[i % imgs.length] } },
+             inventory: { create: { quantity: 50, reserved: 0, lowStockThreshold: 10, reorderPoint: 5, status: 'in_stock' } }
+           }
+        });
+        count++;
+     }
+     res.json({ success: true, message: `Seeded ${count} items successfully` });
+  } catch(e: any) {
+     res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ─── 404 Handler (API only) ───────────────────
+app.all(`${BASE}/*`, (_req, res) => {
   res.status(404).json({ success: false, error: { message: 'Endpoint not found' } })
+})
+
+// Catch-all: serve index.html for non-API requests (Frontend SPA)
+app.get('*', (_req, res) => {
+  const indexPath = path.join(process.cwd(), 'public', 'index.html');
+  res.sendFile(indexPath);
 })
 
 // ─── Global Error Handler ─────────────────────
