@@ -1392,9 +1392,23 @@ app.get(`${BASE}/abandoned-carts`, async (_req, res) => {
     res.json({ success: true, data: abandoned });
   } catch(err) {
     // If cart table doesn't exist or empty, return empty
-    res.json({ success: true, data: [] });
+    res.json({ success: false, data: [] });
   }
-})
+});
+
+app.post(`${BASE}/storefront/checkout/verify`, async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    if(!orderId) return res.json({ success: false, message: 'Захиалгын ID олдсонгүй' });
+    const order = await prisma.order.update({
+      where: { id: orderId },
+      data: { paymentStatus: 'paid', status: 'processing' }
+    });
+    res.json({ success: true, message: 'Төлбөр амжилттай', orderNumber: order.orderNumber });
+  } catch(err) {
+    res.json({ success: false, message: 'Төлбөр шалгахад алдаа гарлаа' });
+  }
+});
 
 // Categories
 app.get(`${BASE}/categories`, async (_req, res) => {
