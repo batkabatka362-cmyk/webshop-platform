@@ -813,6 +813,15 @@ body.light-mode nav.s{background:rgba(255,255,255,.85)}
        <div id="qv-cat" style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:8px">...</div>
        <div id="qv-name" style="font-family:var(--fd);font-size:28px;color:var(--bone);margin-bottom:16px;line-height:1.15">...</div>
        <div id="qv-price" style="font-family:var(--fm);font-size:20px;color:var(--ember);margin-bottom:24px">...</div>
+       <div id="qv-variants" style="margin-bottom:16px">
+         <div style="font-size:12px;color:var(--dim);margin-bottom:8px">Сонголт <span>(Багтаамж / Өнгө)</span></div>
+         <select id="qv-variant-sel" class="ai-i" style="width:100%;padding:10px;box-sizing:border-box">
+           <option value="default">Үндсэн загвар</option>
+           <option value="128GB - Хар">128GB - Хар</option>
+           <option value="256GB - Цагаан">256GB - Цагаан</option>
+           <option value="512GB - Саарал">512GB - Саарал</option>
+         </select>
+       </div>
        <div style="font-size:13px;color:var(--text);margin-bottom:16px;line-height:1.6">Энэхүү бүтээгдэхүүн нь чанарын өндөр түвшинд хийгдсэн бөгөөд 30 хоногийн баталгаатай.</div>
        <!-- V17: STOCK STATUS -->
        <div class="qv-stock in" id="qv-stock">● Бэлэн нөөцтэй</div>
@@ -931,7 +940,28 @@ body.light-mode nav.s{background:rgba(255,255,255,.85)}
     <div class="q-sub" id="qsub">Нийт төлөх дүн: ₮0</div>
     <div class="q-qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://qpay.mn/q/12345678" alt="QR"></div>
     <p style="font-size:11px;color:var(--dim);margin-bottom:24px">Банкны аппаараа кодыг уншуулна уу</p>
-    <button class="q-btn" onclick="document.getElementById('qbg').classList.remove('on');showT('Төлбөр шалгагдаж байна... Худалдан авалт хийсэнд баярлалаа!')">Төлбөр төлсөн</button>
+    <button class="q-btn" onclick="verifyQPay()">Төлбөр шалгах</button>
+  </div>
+</div>
+
+<!-- CHECKOUT FORM MODAL -->
+<div class="qbg" id="mo-checkout">
+  <div class="qbox" style="width:400px;text-align:left;position:relative">
+    <div class="q-title">Хүргэлтийн мэдээлэл</div>
+    <div class="form-group" style="margin-top:20px">
+      <label style="font-size:12px;color:var(--dim)">Утасны дугаар *</label>
+      <input type="text" id="chk-phone" placeholder="9911..." class="ai-i" style="width:100%;box-sizing:border-box;margin-top:4px">
+    </div>
+    <div class="form-group" style="margin-top:16px" id="chk-email-wrap">
+      <label style="font-size:12px;color:var(--dim)">Имэйл хаяг *</label>
+      <input type="email" id="chk-email" placeholder="Таны имэйл" class="ai-i" style="width:100%;box-sizing:border-box;margin-top:4px">
+    </div>
+    <div class="form-group" style="margin-top:16px">
+      <label style="font-size:12px;color:var(--dim)">Хүргэлтийн хаяг (Дэлгэрэнгүй) *</label>
+      <textarea id="chk-address" placeholder="СБД, 1-р хороо..." class="ai-i" style="width:100%;height:80px;resize:none;box-sizing:border-box;margin-top:4px"></textarea>
+    </div>
+    <button class="q-btn" style="margin-top:24px" onclick="submitCheckout()">Цааш: Төлбөр хийх</button>
+    <button class="scls" style="position:absolute;top:16px;right:16px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--dim)" onclick="document.getElementById('mo-checkout').classList.remove('on')">✕</button>
   </div>
 </div>
 
@@ -1220,18 +1250,48 @@ function updCart(){
 function tC(){document.getElementById('cp').classList.toggle('on');document.getElementById('cbg').classList.toggle('on');}
 
 
-async function doCheckout() {
+let currentOrderId = '';
+function doCheckout() {
   if(!cart.length) return showT('Сагсанд бараа алга!');
+  document.getElementById('cbg').classList.remove('on'); document.getElementById('cp').classList.remove('on');
+  document.getElementById('chk-email-wrap').style.display = authToken ? 'none' : 'block';
+  document.getElementById('mo-checkout').classList.add('on');
+}
+
+async function submitCheckout() {
+  const phone = document.getElementById('chk-phone').value;
+  const email = document.getElementById('chk-email').value;
+  const address = document.getElementById('chk-address').value;
+  if(!phone || (!authToken && !email) || !address) return showT('Бүх мэдээллийг гүйцэд оруулна уу');
+  
   const useWallet = document.getElementById('c-use-wallet')?.checked || false;
   const couponCode = document.getElementById('c-coupon')?.value || '';
+  showT('Захиалга үүсгэж байна...');
   try {
-    const r=await fetch(API+'/api/v1/storefront/checkout', { method:'POST', headers:apiHeaders(), body:JSON.stringify({ items:cart, useWallet, couponCode, paymentMethod:'qpay' }) });
+    const pb = { items:cart, useWallet, couponCode, paymentMethod:'qpay', shippingAddress: { phone, address, city: "УБ" } };
+    if(!authToken) pb.email = email;
+    const r=await fetch(API+'/api/v1/storefront/checkout', { method:'POST', headers:apiHeaders(), body:JSON.stringify(pb) });
     const d=await r.json();
     if(d.success) {
+      currentOrderId = d.orderId;
       document.getElementById('qsub').textContent = 'Нийт төлөх дүн: ₮'+d.grandTotal.toLocaleString();
-      cart = []; saveCart(); updCart(); tC();
+      document.getElementById('mo-checkout').classList.remove('on');
+      cart = []; saveCart(); updCart();
       document.getElementById('qbg').classList.add('on');
-    } else { showT(d.message||'Алдаа гарлаа'); }
+    } else { showT(d.message||'Захиалга үүсгэхэд алдаа гарлаа'); }
+  } catch{}
+}
+
+async function verifyQPay() {
+  if(!currentOrderId) return;
+  document.getElementById('qbg').classList.remove('on');
+  showT('Төлбөр шалгагдаж байна...');
+  try {
+    const r=await fetch(API+'/api/v1/storefront/checkout/verify', { method:'POST', headers:apiHeaders(), body:JSON.stringify({orderId: currentOrderId}) });
+    const d=await r.json();
+    if(d.success) {
+      showT('🎉 ' + d.message + ' (ID: ' + d.orderNumber + ')');
+    } else showT('Алдаа: '+d.message);
   } catch{}
 }
 
@@ -1275,7 +1335,13 @@ let curQvId='';
 async function openQv(id){
   const p=ALL.find(x=>x.id===id); if(!p)return; curQvId=id;
   document.getElementById('qv-img').src=p.img||P_IMGS[0]; document.getElementById('qv-cat').textContent=p.cat; document.getElementById('qv-name').textContent=p.name; document.getElementById('qv-price').textContent='₮'+p.price.toLocaleString();
-  document.getElementById('qv-add').onclick=()=>{addToCart(p);document.getElementById('mo-quick').classList.remove('on');};
+  document.getElementById('qv-add').onclick=()=>{
+    const sel=document.getElementById('qv-variant-sel');
+    const v=sel?sel.value:'';
+    const pAdd={...p};
+    if(v&&v!=='default'){ pAdd.name=p.name+' ('+v+')'; pAdd.id=p.id+'-'+v.replace(/\s+/g,''); }
+    addToCart(pAdd); document.getElementById('mo-quick').classList.remove('on');
+  };
   document.getElementById('mo-quick').classList.add('on');
   try{
     const r=await fetch(API+'/api/v1/storefront/products/'+id+'/reviews'); const d=await r.json();

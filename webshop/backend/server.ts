@@ -158,6 +158,63 @@ app.get(`${BASE}/storefront/me`, async (req, res) => {
   } catch(err) { res.status(401).json({ success: false, message: 'Token invalid' }); }
 });
 
+// ─── One-time Remote Seed Endpoint ────────────
+app.post(`${BASE}/admin/seed-once`, async (req, res) => {
+  if (req.headers['x-seed-secret'] !== (process.env.SEED_SECRET || 'webshop-seed-2026')) {
+    return res.status(403).json({ success: false, message: 'Forbidden' });
+  }
+  try {
+    const bcryptLib = await import('bcrypt');
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@webshop.mn';
+    const adminPass  = process.env.ADMIN_PASSWORD || 'Admin1234!';
+    const hash = await bcryptLib.default.hash(adminPass, 12);
+    await prisma.adminUser.upsert({
+      where: { email: adminEmail }, update: {},
+      create: { email: adminEmail, passwordHash: hash, firstName: 'Admin', lastName: 'Webshop', role: 'super_admin', isActive: true }
+    });
+
+    const cats = [
+      { slug: 'utas',     name: 'Утас',      desc: 'Гар утас, ухаалаг утас' },
+      { slug: 'computer', name: 'Компьютер', desc: 'Зөөврийн компьютер, tablet, камер' },
+      { slug: 'audio',    name: 'Дуут',      desc: 'Чихэвч, чанга яригч, аудио' },
+      { slug: 'shoes',    name: 'Гутал',     desc: 'Спорт гутал, пүүз' },
+      { slug: 'home',     name: 'Гэр ахуй',  desc: 'Зурагт, тоос сорогч, гэрийн бараа' },
+    ];
+    const catMap: Record<string, string> = {};
+    for (const [i, c] of cats.entries()) {
+      const cat = await prisma.category.upsert({ where: { slug: c.slug }, update: {}, create: { slug: c.slug, name: c.name, description: c.desc, isActive: true, position: i } });
+      catMap[c.name] = cat.id;
+    }
+
+    const products = [
+      { name: 'Samsung Galaxy S24 Ultra',  cat: 'Утас',      sku: 'WS-SGS24U',  price: 2500000 },
+      { name: 'iPhone 15 Pro Max 256GB',   cat: 'Утас',      sku: 'WS-IP15PM',  price: 3200000 },
+      { name: 'MacBook Air M3 13"',        cat: 'Компьютер', sku: 'WS-MBA-M3',  price: 4200000 },
+      { name: 'Sony WH-1000XM5',           cat: 'Дуут',      sku: 'WS-SNXM5',   price: 850000  },
+      { name: 'Nike Air Max 270',          cat: 'Гутал',     sku: 'WS-NAM270',  price: 320000  },
+      { name: 'iPad Air 5 Wi-Fi 64GB',     cat: 'Компьютер', sku: 'WS-IPA5',    price: 1850000 },
+      { name: 'JBL Charge 5',             cat: 'Дуут',      sku: 'WS-JBLC5',   price: 420000  },
+      { name: 'Xiaomi 14 Pro',            cat: 'Утас',      sku: 'WS-XI14P',   price: 1400000 },
+      { name: 'Adidas Ultraboost 23',     cat: 'Гутал',     sku: 'WS-ADUB23',  price: 450000  },
+      { name: 'LG OLED C3 55"',           cat: 'Гэр ахуй',  sku: 'WS-LGOC3',   price: 3800000 },
+      { name: 'Dyson V15 Detect',         cat: 'Гэр ахуй',  sku: 'WS-DV15',    price: 1950000 },
+      { name: 'Canon EOS R50 Kit',        cat: 'Компьютер', sku: 'WS-CNSR50',  price: 1250000 },
+    ];
+    let seeded = 0;
+    for (const p of products) {
+      const existing = await prisma.product.findFirst({ where: { sku: p.sku } });
+      if (existing) continue;
+      const product = await prisma.product.create({ data: { slug: p.sku.toLowerCase(), name: p.name, sku: p.sku, basePrice: p.price, currency: 'MNT', categoryId: catMap[p.cat] || null, status: 'active' } });
+      await prisma.inventory.create({ data: { productId: product.id, quantity: Math.floor(Math.random() * 50) + 10, reserved: 0, lowStockThreshold: 10, reorderPoint: 5, status: 'in_stock' } });
+      seeded++;
+    }
+    res.json({ success: true, message: `Seeded ${seeded} products and ${cats.length} categories.` });
+  } catch(err: any) {
+    console.error('[SEED ERROR]', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 app.get(`${BASE}/storefront/live-feed`, async (req, res) => {
   try {
     const orders = await prisma.order.findMany({
@@ -1543,6 +1600,47 @@ app.post(`${BASE}/storefront/webhooks/qpay`, async (req, res) => {
     res.status(500).json({ success: false });
   }
 });
+
+// 3. BACKGROUND WORKER: Abandoned Order Inventory Release (Horizontal Scaling Safe)
+setInterval(async () => {
+  try {
+    const expireTime = new Date(Date.now() - 15 * 60000);
+    const expiredOrders = await prisma.order.findMany({
+      where: { paymentStatus: 'pending', status: 'pending', placedAt: { lt: expireTime } },
+      include: { items: true }
+    });
+
+    for (const ord of expiredOrders) {
+      await prisma.$transaction(async (tx) => {
+        // ATOMIC CLAIM: Ensure only one scaled instance can cancel this order
+        const claim = await tx.order.updateMany({ 
+          where: { id: ord.id, status: 'pending', paymentStatus: 'pending' }, 
+          data: { status: 'cancelled' } 
+        });
+        if (claim.count === 0) return; // Another server worker already claimed it
+        
+        // Restore Inventory Safely
+        for (const item of ord.items) {
+          await tx.inventory.updateMany({
+            where: { productId: item.productId },
+            data: { quantity: { increment: item.quantity } }
+          });
+        }
+        
+        // Restore Wallet
+        if (ord.customerId && ord.discountTotal > 0) {
+          const sysAdmin = await tx.adminUser.findFirst();
+          if (sysAdmin) {
+            await tx.adminActivity.create({
+              data: { adminId: sysAdmin.id, action: 'WALLET_TX', resource: 'Customer', resourceId: ord.customerId, details: { amount: ord.discountTotal, reason: `Захиалга цуцлагдсан буцаалт (ID: ${ord.id})` } }
+            });
+          }
+        }
+      });
+      console.log(`[SYSTEM:WORKER] Released inventory for abandoned order: ${ord.id}`);
+    }
+  } catch(e) {}
+}, 60000);
 
 // Categories
 app.get(`${BASE}/categories`, async (_req, res) => {

@@ -7,13 +7,8 @@
 import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcrypt'
-import crypto from 'crypto'
 
 const prisma = new PrismaClient()
-
-function slug(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9\u0400-\u04ff]+/g, '-').replace(/(^-|-$)/g, '') + '-' + crypto.randomBytes(2).toString('hex')
-}
 
 async function seed() {
   console.log('🌱 Seeding database...\n')
@@ -35,20 +30,21 @@ async function seed() {
   console.log(`✅ Admin: ${admin.email}`)
 
   // ─── Categories ─────────────────────────────
+  // Use deterministic slugs so upsert works reliably on repeated runs
   const cats = [
-    { name: 'Утас', desc: 'Гар утас, ухаалаг утас' },
-    { name: 'Компьютер', desc: 'Зөөврийн компьютер, tablet, камер' },
-    { name: 'Дуут', desc: 'Чихэвч, чанга яригч, аудио' },
-    { name: 'Гутал', desc: 'Спорт гутал, пүүз' },
-    { name: 'Гэр ахуй', desc: 'Зурагт, тоос сорогч, гэрийн бараа' },
+    { slug: 'utas',     name: 'Утас',      desc: 'Гар утас, ухаалаг утас' },
+    { slug: 'computer', name: 'Компьютер', desc: 'Зөөврийн компьютер, tablet, камер' },
+    { slug: 'audio',    name: 'Дуут',      desc: 'Чихэвч, чанга яригч, аудио' },
+    { slug: 'shoes',    name: 'Гутал',     desc: 'Спорт гутал, пүүз' },
+    { slug: 'home',     name: 'Гэр ахуй',  desc: 'Зурагт, тоос сорогч, гэрийн бараа' },
   ]
 
   const catMap: Record<string, string> = {}
-  for (const c of cats) {
+  for (const [i, c] of cats.entries()) {
     const cat = await prisma.category.upsert({
-      where:  { slug: slug(c.name).split('-').slice(0, -1).join('-') + '-seed' },
-      update: {},
-      create: { slug: slug(c.name), name: c.name, description: c.desc, isActive: true, position: cats.indexOf(c) },
+      where:  { slug: c.slug },
+      update: { name: c.name, description: c.desc },
+      create: { slug: c.slug, name: c.name, description: c.desc, isActive: true, position: i },
     })
     catMap[c.name] = cat.id
     console.log(`✅ Category: ${cat.name}`)
@@ -56,34 +52,38 @@ async function seed() {
 
   // ─── Products ───────────────────────────────
   const products = [
-    { name: 'Samsung Galaxy S24 Ultra', cat: 'Утас', sku: 'WS-SGS24U', price: 2500000, desc: 'Хамгийн сүүлийн үеийн Samsung flagship утас. 200MP камер, Titanium frame, S Pen дэмжлэг.' },
-    { name: 'iPhone 15 Pro Max 256GB', cat: 'Утас', sku: 'WS-IP15PM', price: 3200000, desc: 'Apple-ийн хамгийн хүчирхэг утас. A17 Pro чип, Titanium дизайн, USB-C.' },
-    { name: 'MacBook Air M3 13"', cat: 'Компьютер', sku: 'WS-MBA-M3', price: 4200000, desc: 'Хамгийн нимгэн, хөнгөн MacBook. M3 чип, 18 цагийн батерей.' },
-    { name: 'Sony WH-1000XM5', cat: 'Дуут', sku: 'WS-SNXM5', price: 850000, desc: 'Дэлхийн хамгийн сайн дуу тусгаарлагч чихэвч.' },
-    { name: 'Nike Air Max 270', cat: 'Гутал', sku: 'WS-NAM270', price: 320000, desc: 'Тав тухтай, хөнгөн спорт гутал.' },
-    { name: 'iPad Air 5 Wi-Fi 64GB', cat: 'Компьютер', sku: 'WS-IPA5', price: 1850000, desc: 'M1 чиптэй iPad Air. 10.9 инч Liquid Retina дэлгэц.' },
-    { name: 'JBL Charge 5', cat: 'Дуут', sku: 'WS-JBLC5', price: 420000, desc: 'Усанд тэсвэртэй Bluetooth чанга яригч.' },
-    { name: 'Xiaomi 14 Pro', cat: 'Утас', sku: 'WS-XI14P', price: 1400000, desc: 'Leica камертай Xiaomi flagship.' },
-    { name: 'Adidas Ultraboost 23', cat: 'Гутал', sku: 'WS-ADUB23', price: 450000, desc: 'BOOST технологитой гүйлтийн гутал.' },
-    { name: 'LG OLED C3 55"', cat: 'Гэр ахуй', sku: 'WS-LGOC3', price: 3800000, desc: '4K OLED зурагт. α9 Gen6 процессор.' },
-    { name: 'Dyson V15 Detect', cat: 'Гэр ахуй', sku: 'WS-DV15', price: 1950000, desc: 'Лазер тоос илрүүлэгч бүхий тоос сорогч.' },
-    { name: 'Canon EOS R50 Kit', cat: 'Компьютер', sku: 'WS-CNSR50', price: 1250000, desc: 'Эхлэгчдэд зориулсан mirrorless камер.' },
+    { name: 'Samsung Galaxy S24 Ultra',  cat: 'Утас',      sku: 'WS-SGS24U',  price: 2500000, desc: 'Хамгийн сүүлийн үеийн Samsung flagship утас. 200MP камер, Titanium frame, S Pen дэмжлэг.' },
+    { name: 'iPhone 15 Pro Max 256GB',   cat: 'Утас',      sku: 'WS-IP15PM',  price: 3200000, desc: 'Apple-ийн хамгийн хүчирхэг утас. A17 Pro чип, Titanium дизайн, USB-C.' },
+    { name: 'MacBook Air M3 13"',        cat: 'Компьютер', sku: 'WS-MBA-M3',  price: 4200000, desc: 'Хамгийн нимгэн, хөнгөн MacBook. M3 чип, 18 цагийн батерей.' },
+    { name: 'Sony WH-1000XM5',           cat: 'Дуут',      sku: 'WS-SNXM5',   price: 850000,  desc: 'Дэлхийн хамгийн сайн дуу тусгаарлагч чихэвч.' },
+    { name: 'Nike Air Max 270',          cat: 'Гутал',     sku: 'WS-NAM270',  price: 320000,  desc: 'Тав тухтай, хөнгөн спорт гутал.' },
+    { name: 'iPad Air 5 Wi-Fi 64GB',     cat: 'Компьютер', sku: 'WS-IPA5',    price: 1850000, desc: 'M1 чиптэй iPad Air. 10.9 инч Liquid Retina дэлгэц.' },
+    { name: 'JBL Charge 5',             cat: 'Дуут',      sku: 'WS-JBLC5',   price: 420000,  desc: 'Усанд тэсвэртэй Bluetooth чанга яригч.' },
+    { name: 'Xiaomi 14 Pro',            cat: 'Утас',      sku: 'WS-XI14P',   price: 1400000, desc: 'Leica камертай Xiaomi flagship.' },
+    { name: 'Adidas Ultraboost 23',     cat: 'Гутал',     sku: 'WS-ADUB23',  price: 450000,  desc: 'BOOST технологитой гүйлтийн гутал.' },
+    { name: 'LG OLED C3 55"',           cat: 'Гэр ахуй',  sku: 'WS-LGOC3',   price: 3800000, desc: '4K OLED зурагт. α9 Gen6 процессор.' },
+    { name: 'Dyson V15 Detect',         cat: 'Гэр ахуй',  sku: 'WS-DV15',    price: 1950000, desc: 'Лазер тоос илрүүлэгч бүхий тоос сорогч.' },
+    { name: 'Canon EOS R50 Kit',        cat: 'Компьютер', sku: 'WS-CNSR50',  price: 1250000, desc: 'Эхлэгчдэд зориулсан mirrorless камер.' },
   ]
 
   for (const p of products) {
+    // Idempotent: skip if SKU already exists
     const existing = await prisma.product.findFirst({ where: { sku: p.sku } })
-    if (existing) { console.log(`  ⏭ Product exists: ${p.name}`); continue }
+    if (existing) { console.log(`  ⏭  Product exists: ${p.name}`); continue }
+
+    // Deterministic slug from SKU
+    const productSlug = p.sku.toLowerCase()
 
     const product = await prisma.product.create({
       data: {
-        slug:       slug(p.name),
-        name:       p.name,
+        slug:        productSlug,
+        name:        p.name,
         description: p.desc,
-        sku:        p.sku,
-        basePrice:  p.price,
-        currency:   'MNT',
-        categoryId: catMap[p.cat],
-        status:     'active',
+        sku:         p.sku,
+        basePrice:   p.price,
+        currency:    'MNT',
+        categoryId:  catMap[p.cat] || null,
+        status:      'active',
       },
     })
 
@@ -91,7 +91,7 @@ async function seed() {
     await prisma.inventory.create({
       data: {
         productId:         product.id,
-        quantity:           Math.floor(Math.random() * 50) + 10,
+        quantity:          Math.floor(Math.random() * 50) + 10,
         reserved:          0,
         lowStockThreshold: 10,
         reorderPoint:      5,
