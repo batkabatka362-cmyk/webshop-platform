@@ -158,73 +158,132 @@ app.post(`${BASE}/storefront/checkout`, async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     let customerId = null; let guestEmail = null;
-    if(token) { const decoded = jwt.verify(token, STOREFRONT_SECRET) as any; customerId = decoded.id; }
-    else { guestEmail = req.body.email || 'guest@example.com'; }
+    if(token) { 
+      try { const decoded = jwt.verify(token, STOREFRONT_SECRET) as any; customerId = decoded.id; } 
+      catch { return res.status(401).json({ success: false, message: 'Токен хүчингүй' }); }
+    } else { 
+      guestEmail = req.body.email; 
+      if(!guestEmail) return res.status(400).json({ success: false, message: 'Имэйл хаяг шаардлагатай' });
+    }
 
     const { items, useWallet, couponCode, shippingAddress } = req.body;
-    let subtotal = (items||[]).reduce((sum: number, i: any) => sum + (i.price * i.qty), 0);
+    if(!items || !items.length) return res.status(400).json({ success: false, message: 'Сагс хоосон байна' });
+
+    // 1. Fetch REAL prices from DB (Client distrust)
+    const productIds = items.map((i: any) => i.id?.split('-')[0] || i.id);
+    const dbProducts = await prisma.product.findMany({ where: { id: { in: productIds }, status: 'active' } });
+    const productMap = new Map(dbProducts.map(p => [p.id, p]));
+
+    let calculatedSubtotal = 0;
+    const verifiedItems = [];
+
+    for (const i of items) {
+      const baseId = i.id?.split('-')[0] || i.id;
+      const dbProd = productMap.get(baseId);
+      if (!dbProd) throw new Error(`Бараа олдсонгүй эсвэл идэвхгүй байна: ${i.name || baseId}`);
+      
+      const qty = Math.max(1, Math.floor(Number(i.qty) || 1));
+      const actualPrice = dbProd.discountPrice > 0 ? dbProd.discountPrice : dbProd.price;
+      calculatedSubtotal += (actualPrice * qty);
+      
+      verifiedItems.push({
+        productId: baseId,
+        productName: i.name || dbProd.name,
+        sku: i.id, // storing variant
+        quantity: qty,
+        unitPrice: actualPrice,
+        totalPrice: actualPrice * qty,
+        imageUrl: i.img || dbProd.images?.[0] || ''
+      });
+    }
+
     const shippingTotal = 5000;
     let discountTotal = 0;
-
-    if(couponCode) {
-      const coupon = await prisma.coupon.findUnique({ where: { code: couponCode } });
-      if(coupon && coupon.active && subtotal >= coupon.minOrderAmount) {
-        if(coupon.discountType === 'percentage') discountTotal += (subtotal * (coupon.discountValue / 100));
-        else discountTotal += coupon.discountValue;
-        await prisma.coupon.update({ where: { id: coupon.id }, data: { usageCount: { increment: 1 } } });
-      }
-    }
-
-    if(useWallet && customerId) {
-      const walletRecords = await prisma.adminActivity.findMany({ where: { resource: 'Customer', resourceId: customerId, action: 'WALLET_TX' } });
-      const walletBalance = walletRecords.reduce((sum: number, r: any) => sum + (r.details?.amount || 0), 0);
-      if(walletBalance > 0) {
-        const walletUsed = Math.min(walletBalance, subtotal + shippingTotal - discountTotal);
-        discountTotal += walletUsed;
-        const systemAdmin = await prisma.adminUser.findFirst();
-        if(systemAdmin) {
-          await prisma.adminActivity.create({
-            data: { adminId: systemAdmin.id, action: 'WALLET_TX', resource: 'Customer', resourceId: customerId, details: { amount: -walletUsed, reason: 'Оноогоор хийсэн худалдан авалт' } }
-          });
-        }
-      }
-    }
-
-    let grandTotal = subtotal + shippingTotal - discountTotal; if(grandTotal < 0) grandTotal = 0;
-    const orderNumber = 'WS-' + Date.now();
     const orderId = require('crypto').randomUUID();
-    const order = await prisma.order.create({
-      data: {
-        id: orderId, orderNumber, customerId, guestEmail, status: 'pending',
-        paymentStatus: grandTotal === 0 ? 'paid' : 'pending',
-        paymentId: req.body.paymentMethod || 'qpay',
-        subtotal, discountTotal, shippingTotal, taxTotal: 0, grandTotal, couponCode,
-        shippingAddress: shippingAddress || { city: "УБ" }, billingAddress: {}, shippingMethod: { name: "Standard" },
-        placedAt: new Date(),
-        items: {
-          create: (items||[]).map((i: any) => ({
-            productId: i.id,
-            productName: i.name || 'Бараа',
-            sku: i.id?.slice(0,8) || 'SKU-' + Date.now(),
-            quantity: i.qty || 1,
-            unitPrice: i.price || 0,
-            totalPrice: (i.price || 0) * (i.qty || 1),
-            imageUrl: i.img || ''
-          }))
+
+    // Execute ATOMIC Transaction
+    const order = await prisma.$transaction(async (tx) => {
+      
+      // 2. Inventory check & deduct (Concurrency Safe)
+      for (const item of verifiedItems) {
+        const inventoryUpdate = await tx.inventory.updateMany({
+          where: { productId: item.productId, quantity: { gte: item.quantity } },
+          data: { quantity: { decrement: item.quantity } }
+        });
+        if (inventoryUpdate.count === 0) {
+          const invCheck = await tx.inventory.findFirst({ where: { productId: item.productId } });
+          const stock = invCheck ? invCheck.quantity : 0;
+          throw new Error(`Нөөц хүрэлцэхгүй байна: ${item.productName} (Үлдэгдэл: ${stock})`);
         }
       }
-    });
-    res.json({ success: true, orderId: order.id, grandTotal });
 
-    // V13: Deduct inventory for each purchased item (fire-and-forget)
-    for(const i of (items||[])) {
-      try {
-        await prisma.inventory.updateMany({ where: { productId: i.id }, data: { quantity: { decrement: i.qty || 1 } } });
-      } catch(e) { /* ignore if no inventory record */ }
-    }
-  } catch(err: any) {
-    console.error('Checkout Error:', err?.message || err);
-    res.status(500).json({ success: false, message: 'Захиалга үүсгэхэд алдаа гарлаа' });
+      // 3. Coupon processing
+      let usedCouponId = null;
+      if (couponCode) {
+        const coupon = await tx.coupon.findUnique({ where: { code: couponCode } });
+        if (!coupon || !coupon.active || calculatedSubtotal < coupon.minOrderAmount) {
+          throw new Error('Купон хүчингүй эсвэл нөхцөл хангахгүй байна');
+        }
+        discountTotal += coupon.discountType === 'percentage' ? (calculatedSubtotal * (coupon.discountValue / 100)) : coupon.discountValue;
+        usedCouponId = coupon.id;
+      }
+
+      // 4. Wallet Deduct
+      let walletDeducted = 0;
+      if (useWallet && customerId) {
+        await tx.$executeRaw`SELECT "id" FROM "Customer" WHERE "id" = ${customerId} FOR UPDATE`;
+        const walletRecords = await tx.adminActivity.findMany({ where: { resource: 'Customer', resourceId: customerId, action: 'WALLET_TX' } });
+        const walletBalance = walletRecords.reduce((sum: number, r: any) => sum + (r.details?.amount || 0), 0);
+        if (walletBalance > 0) {
+          walletDeducted = Math.min(walletBalance, calculatedSubtotal + shippingTotal - discountTotal);
+          discountTotal += walletDeducted;
+          const systemAdmin = await tx.adminUser.findFirst();
+          if (systemAdmin) {
+            await tx.adminActivity.create({
+              data: { adminId: systemAdmin.id, action: 'WALLET_TX', resource: 'Customer', resourceId: customerId, details: { amount: -walletDeducted, reason: `Төлбөр хөнгөлөлт (Захиалга: ${orderId})` } }
+            });
+          }
+        }
+      }
+
+      let grandTotal = calculatedSubtotal + shippingTotal - discountTotal;
+      if (grandTotal < 0) grandTotal = 0;
+
+      // 5. Create Order
+      const newOrder = await tx.order.create({
+        data: {
+          id: orderId,
+          orderNumber: 'WS-' + Date.now() + '-' + Math.floor(Math.random()*1000),
+          customerId,
+          guestEmail,
+          status: 'pending',
+          paymentStatus: grandTotal === 0 ? 'paid' : 'pending',
+          paymentId: req.body.paymentMethod || 'qpay',
+          subtotal: calculatedSubtotal, 
+          discountTotal, 
+          shippingTotal, 
+          taxTotal: 0, 
+          grandTotal, 
+          couponCode,
+          shippingAddress: shippingAddress || { city: "УБ" }, 
+          billingAddress: {}, 
+          shippingMethod: { name: "Standard" },
+          placedAt: new Date(),
+          items: { create: verifiedItems }
+        }
+      });
+
+      if (usedCouponId) {
+        await tx.coupon.update({ where: { id: usedCouponId }, data: { usageCount: { increment: 1 } } });
+      }
+
+      return newOrder;
+    });
+
+    res.json({ success: true, orderId: order.id, grandTotal: order.grandTotal });
+  } catch (err: any) {
+    console.error('[CHECKOUT VULNERABILITY PREVENTION]', err);
+    res.status(400).json({ success: false, message: err.message || 'Захиалга үүсгэхэд алдаа гарлаа' });
   }
 });
 
@@ -1396,17 +1455,45 @@ app.get(`${BASE}/abandoned-carts`, async (_req, res) => {
   }
 });
 
+// 1. Client-Side Polling Verification (READ-ONLY)
 app.post(`${BASE}/storefront/checkout/verify`, async (req, res) => {
   try {
     const { orderId } = req.body;
-    if(!orderId) return res.json({ success: false, message: 'Захиалгын ID олдсонгүй' });
-    const order = await prisma.order.update({
-      where: { id: orderId },
-      data: { paymentStatus: 'paid', status: 'processing' }
-    });
-    res.json({ success: true, message: 'Төлбөр амжилттай', orderNumber: order.orderNumber });
+    if(!orderId) return res.status(400).json({ success: false, message: 'Захиалгын ID шаардлагатай' });
+
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) return res.status(404).json({ success: false, message: 'Захиалга олдсонгүй' });
+
+    if (order.paymentStatus === 'paid') {
+      res.json({ success: true, message: 'Төлбөр амжилттай баталгаажлаа', orderNumber: order.orderNumber });
+    } else {
+      res.json({ success: false, pending: true, message: 'Төлбөр хүлээгдэж байна' });
+    }
+  } catch(err: any) {
+    res.status(500).json({ success: false, message: 'Алдаа гарлаа' });
+  }
+});
+
+// 2. QPay Secure Webhook Endpoint (AUTHORITATIVE WRITE)
+app.post(`${BASE}/storefront/webhooks/qpay`, async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader !== `Bearer ${process.env.QPAY_WEBHOOK_SECRET}`) {
+      return res.status(403).json({ success: false, message: 'Зөвшөөрөлгүй хандалт (Invalid Webhook Secret)' });
+    }
+
+    const { orderId, payment_status } = req.body;
+    if (payment_status === 'PAID') {
+      await prisma.order.update({
+        where: { id: orderId },
+        data: { paymentStatus: 'paid', status: 'processing' }
+      });
+      console.log(`[SECURITY] Order ${orderId} successfully processed via QPay Webhook.`);
+    }
+    res.json({ success: true });
   } catch(err) {
-    res.json({ success: false, message: 'Төлбөр шалгахад алдаа гарлаа' });
+    console.error('[WEBHOOK ERROR]', err);
+    res.status(500).json({ success: false });
   }
 });
 
