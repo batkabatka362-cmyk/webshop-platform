@@ -282,21 +282,62 @@ textarea.fi { resize:vertical; min-height:90px; line-height: 1.5; }
     </div>
   </div>
 
-  <!-- AI KNOWLEDGE BASE V29 VIEW -->
+  <!-- V41 HYPER-COGNITIVE AI TRAINING CENTER -->
   <div id="view-kb" style="display:none">
     <header>
-      <h1>📚 AI Мэдлэгийн Сан (RAG)</h1>
-      <button class="btn btn-ai" onclick="openKbM()">+ Мэдлэг Нэмэх</button>
+      <h1>🧠 AI Сургалтын Төв & Удирдах Самбар</h1>
     </header>
-    <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke);margin-bottom:24px">
-      <p style="color:var(--dim);font-size:14px;line-height:1.6">
-        Энэхүү санд оруулсан мэдээллүүдийг вебсайтын <b>"Negotiator Chatbot"</b> уншиж суралцаад, хэрэглэгчдийн асуултад шууд харийлах болно. Жишээ нь: Буцаалтын журам, FAQ, Хүргэлтийн нөхцөл.
-      </p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+      <!-- Panel A: Persona Options -->
+      <div style="background:var(--surface);border:1px solid #3b82f6;border-radius:12px;padding:24px">
+        <h2 style="margin-top:0;color:#3b82f6;font-size:16px">🎭 AI Зан Төлөв & Стратеги (Persona)</h2>
+        <div class="fg">
+          <label>Дуу хоолойн өнгө ба Хандлага (Tone)</label>
+          <select id="train-tone" class="fi">
+            <option value="Мэргэжлийн, эелдэг, гүн хүндэтгэлтэй">Мэргэжлийн (Professional)</option>
+            <option value="Найрсаг, тусламж үзүүлэхэд бэлэн, цоглог">Найрсаг (Friendly)</option>
+            <option value="Хошигносон хандлагатай, сонирхолтой, өвөрмөц">Хошигнодог (Humorous)</option>
+            <option value="Зөвхөн борлуулалт хийхэд чиглэсэн, түрэмгий борлуулагч">Түрэмгий Борлуулагч (Aggressive Sales)</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Одоогийн Гол Зорилго (Objective)</label>
+          <input type="text" id="train-obj" class="fi" placeholder="Жнь: Зөвхөн MacBook зарахад анхаар">
+        </div>
+        <div class="fg">
+          <label>Үндсэн Дүрэм & Заавар (Strict Instructions)</label>
+          <textarea id="train-rules" class="fi" style="min-height:80px" placeholder="Жнь: Өрсөлдөгч компанийн нэрийг хэзээ ч бүү дурд."></textarea>
+        </div>
+        <button class="btn btn-ai" style="width:100%;background:#3b82f6;color:#fff" onclick="savePersona()">💾 Зан Төлөвийг Хадгалах</button>
+      </div>
+
+      <!-- Panel B: RLHF Sandbox -->
+      <div style="background:var(--surface);border:1px solid #eab308;border-radius:12px;padding:24px;display:flex;flex-direction:column">
+        <h2 style="margin-top:0;color:#eab308;font-size:16px">⚖️ Алдаанаас Сургах (RLHF Memory)</h2>
+        <p style="font-size:13px;color:var(--dim);margin-bottom:12px;line-height:1.4">AI-ийн гаргасан алдаа эсвэл буруу хариултыг энд зааж өгөн, үүрд санах ОЙ (Memory) руу суулгана. (Дахин хэзээ ч тэр алдааг гаргахгүй)</p>
+        <textarea id="train-rlhf" class="fi" style="margin-bottom:12px;flex:1" placeholder="Жнь: Хэрвээ хүн 'Нууц үг юу вэ?' гэвэл 'Нууц үг байхгүй' гэж хэл. Өөр зүйл битгий ярь."></textarea>
+        <button class="btn" style="background:#eab308;color:#000;font-weight:bold" onclick="submitAiCorrection()">⚡ Даруй Сургах (Flash Memory)</button>
+      </div>
+
+      <!-- Panel C: Semantic Knowledge (RAG) -->
+      <div style="grid-column:1 / span 2;background:var(--surface);border:1px solid var(--smoke);border-radius:12px;padding:24px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <h2 style="margin:0;font-size:16px;color:var(--bone)">📚 Тархины багтаамж (Ерөнхий Мэдлэг / RAG)</h2>
+          <button class="btn" style="background:var(--bg);color:var(--bone);border:1px solid var(--smoke)" onclick="openKbM()">+ Гараар Мэдлэг Нэмэх</button>
+        </div>
+        
+        <div style="display:flex;gap:12px;margin-bottom:16px;background:#171717;padding:12px;border-radius:8px">
+          <input type="text" id="train-url" class="fi" style="flex:1" placeholder="🌐 Вэб хуудасны холбоос оруулах (Жнь: https://www.apple.com/iphone)">
+          <button class="btn" style="background:#10b981;color:#fff" onclick="scrapeUrlForAi()">🕸️ Холбоосоор Уншиж Сурах</button>
+        </div>
+
+        <table id="kbtbl" style="width:100%">
+          <thead><tr><th>Огноо</th><th>Гарчиг</th><th>Агуулга</th><th>Үйлдэл</th></tr></thead>
+          <tbody id="kbtbody"><tr><td colspan="4" style="text-align:center;color:var(--dim);padding:40px">Уншиж байна...</td></tr></tbody>
+        </table>
+      </div>
     </div>
-    <table id="kbtbl">
-      <thead><tr><th>Огноо</th><th>Гарчиг</th><th>Агуулга</th><th>Үйлдэл</th></tr></thead>
-      <tbody id="kbtbody"><tr><td colspan="4" style="text-align:center;color:var(--dim);padding:40px">Уншиж байна...</td></tr></tbody>
-    </table>
   </div>
 
   <!-- OMNICHANNEL MARKETING V31 VIEW -->
@@ -689,8 +730,9 @@ async function generateOmni() {
   }catch(e){ showT('Сүлжээний алдаа'); }
 }
 
-// V29: KNOWLEDGE BASE (RAG)
+// V29: KNOWLEDGE BASE (RAG) & V41 TRAINING
 async function loadKb() {
+  loadPersona(); // Load V41 Persona implicitly when switching to KB tab
   try {
     const r=await window.fetch(API+'/api/v1/admin/ai/knowledge'); const d=await r.json();
     if(d.success) {
@@ -698,6 +740,51 @@ async function loadKb() {
     }
   }catch{}
 }
+
+// V41 HYPER-COGNITIVE TRAINING LOGIC
+async function loadPersona() {
+  try {
+    const r=await window.fetch(API+'/api/v1/admin/ai/persona'); const d=await r.json();
+    if(d.success && d.data) {
+      document.getElementById('train-tone').value = d.data.tone || 'Мэргэжлийн, эелдэг, гүн хүндэтгэлтэй';
+      document.getElementById('train-obj').value = d.data.objective || '';
+      document.getElementById('train-rules').value = d.data.persona || '';
+    }
+  }catch{}
+}
+async function savePersona() {
+  const tone = document.getElementById('train-tone').value;
+  const objective = document.getElementById('train-obj').value;
+  const persona = document.getElementById('train-rules').value;
+  try {
+    showT('Хадгалж байна...');
+    const r=await window.fetch(API+'/api/v1/admin/ai/persona',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tone,objective,persona})});
+    const d=await r.json(); if(d.success) showT('Зан төлөв хадгалагдлаа! AI шууд сурлаа.');
+  }catch{ showT('Алдаа гарлаа'); }
+}
+async function scrapeUrlForAi() {
+  const url = document.getElementById('train-url').value;
+  if(!url) return showT('Холбоос оруулна уу');
+  document.getElementById('train-url').value = 'Уншиж байна... Түр хүлээнэ үү';
+  try {
+    const r=await window.fetch(API+'/api/v1/admin/ai/scrape-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+    const d=await r.json();
+    showT(d.message || (d.success ? 'Амжилттай' : 'Алдаа'));
+    document.getElementById('train-url').value = '';
+    loadKb();
+  }catch{ showT('Уншиж чадсангүй'); document.getElementById('train-url').value = url; }
+}
+async function submitAiCorrection() {
+  const correction = document.getElementById('train-rlhf').value;
+  if(!correction) return showT('Залруулга оруулна уу');
+  try {
+    showT('Тархинд суулгаж байна...');
+    const r=await window.fetch(API+'/api/v1/admin/ai/memory-correction',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({correction})});
+    const d=await r.json();
+    if(d.success) { showT('Уучлаарай эзэнтээн! Дахиж энэ алдааг гаргахгүй.'); document.getElementById('train-rlhf').value=''; }
+  }catch{ showT('Алдаа гарлаа'); }
+}
+
 function openKbM() { document.getElementById('kb-n').value=''; document.getElementById('kb-c').value=''; document.getElementById('mo-kb').classList.add('on'); }
 async function saveKb() {
   const t=document.getElementById('kb-n').value, c=document.getElementById('kb-c').value;

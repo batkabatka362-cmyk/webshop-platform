@@ -908,8 +908,8 @@ app.post(`${BASE}/storefront/ai/chat`, async (req, res) => {
   try {
     const { message, chatHistory, context } = req.body;
     
-    // V29: Fetch Knowledge Base (RAG)
-    const kbDocs = await prisma.aiKnowledgeBase.findMany({ where: { isActive: true } });
+    // V29: Fetch Knowledge Base (RAG) (Excluding SYSTEM_PERSONA)
+    const kbDocs = await prisma.aiKnowledgeBase.findMany({ where: { isActive: true, title: { not: 'SYSTEM_PERSONA' } } });
     const kbContext = kbDocs.length > 0 
       ? "\nБАЙГУУЛЛАГЫН МЭДЛЭГИЙН САН (ҮҮНИЙГ АШИГЛАН АСУУЛТАД ХАРИУЛНА УУ):\n" + kbDocs.map((d: any) => `--- ${d.title} ---\n${d.content}`).join("\n\n")
       : "";
@@ -920,15 +920,33 @@ app.post(`${BASE}/storefront/ai/chat`, async (req, res) => {
 - Сагсанд байгаа бараанууд: ${context.cart ? JSON.stringify(context.cart) : 'Хоосон'}
 - Үйлдэл: Үүн дээр тулгуурлан хэрэглэгчид тохирсон санал тавих эсвэл тусламж санал болгож болно.` : '';
 
-    // We give the AI the persona of a powerful salesman
-    const sysPrompt = `Та WEBSHOP-ийн Шийдвэр гаргах эрхтэй Ахлах Борлуулагч (Negotiator AI). 
-Зорилго: Үйлчлүүлэгчийг худалдан авалт хийхэд ятгах, туслах, хэрэгтэй бол хямдрал санал болгох.
+    // V41: HYPER-COGNITIVE SYSTEM PERSONA & RLHF FEEDBACK 
+    const personaDoc = await prisma.aiKnowledgeBase.findFirst({ where: { title: 'SYSTEM_PERSONA' } });
+    let personaConfig = { persona: '', tone: 'Мэргэжлийн', objective: '' };
+    if (personaDoc && personaDoc.content) {
+      try { personaConfig = JSON.parse(personaDoc.content); } catch(e) {}
+    }
+    
+    // Fetch RLHF Memory Rules
+    const rlhfRules = await prisma.aiMemory.findMany({ where: { type: 'rule' }, orderBy: { createdAt: 'desc' } });
+    const rlhfContext = rlhfRules.length > 0 
+      ? "\n(RLHF) ХАМГИЙН ЧУХАЛ САХИХ ЁСТОЙ ДҮРМҮҮД (НЭГ Ч ЗӨРЧИЖ БОЛОХГҮЙ):\n" + rlhfRules.map(r => `- ${r.context}`).join("\n") 
+      : "";
+
+    // We give the AI the persona of a powerful salesman + V41 Custom Settings
+    const sysPrompt = `Та WEBSHOP-ийн Шийдвэр гаргах эрхтэй Ахлах Борлуулагч (Negotiator AI).
+Таны дуу хоолойн өнгө (Tone): ${personaConfig.tone}
+Таны одоогийн гол зорилго (Objective): ${personaConfig.objective || 'Үйлчлүүлэгчийг худалдан авалт хийхэд ятгах, туслах, хэрэгтэй бол хямдрал санал болгох.'}
+Тусгай Зан төлөв (Persona): ${personaConfig.persona || 'Үргэлж эелдэг, мэргэжлийн монгол хэлээр хариул.'}
+
 ДҮРЭМ:
-1. Үргэлж эелдэг, мэргэжлийн монгол хэлээр хариул.
-2. Хэрэв үйлчлүүлэгч үнэтэй байна гэж эргэлзвэл 5% эсвэл 10% хямдрал өгч болно.
-3. ХЯМДРАЛ ӨГӨХӨӨР БОЛБОЛ өөрийн хариулт дотроо [PROMO:10] гэж бичээрэй (10 хувь бол).
-4. Богино, оновчтой бай.
-5. Дэлгүүртэй холбоотой түгээмэл асуултуудад МЭДЛЭГИЙН САН дотроос харж хариулна.${kbContext}${contextualDocs}`;
+1. Хэрэв үйлчлүүлэгч үнэтэй байна гэж эргэлзвэл 5% эсвэл 10% хямдрал өгч болно.
+2. ХЯМДРАЛ ӨГӨХӨӨР БОЛБОЛ өөрийн хариулт дотроо [PROMO:10] гэж бичээрэй (10 хувь бол).
+3. Богино, оновчтой бай.
+4. Дэлгүүртэй холбоотой түгээмэл асуултуудад МЭДЛЭГИЙН САН дотроос харж хариулна.
+${rlhfContext}
+${kbContext}
+${contextualDocs}`;
 
     const fullPrompt = `Өмнөх яриа: ${chatHistory || 'Байхгүй'}\n\nХэрэглэгч: ${message}\nBорлуулагч:`;
     const aiResponseText = await aiCall(fullPrompt, sysPrompt);
@@ -1017,6 +1035,68 @@ app.delete(`${BASE}/admin/ai/knowledge/:id`, async (req, res) => {
     res.json({ success: true });
   } catch(e) { res.status(500).json({ success: false }); }
 });
+
+// ── V41 HYPER-COGNITIVE AI: PERSONA & RLHF ENDPOINTS ──
+app.get(`${BASE}/admin/ai/persona`, async (_req, res) => {
+  try {
+    const doc = await prisma.aiKnowledgeBase.findFirst({ where: { title: 'SYSTEM_PERSONA' } });
+    if(doc && doc.content) {
+      try { res.json({ success: true, data: JSON.parse(doc.content) }); } catch { res.json({ success: true, data: {} }); }
+    } else {
+      res.json({ success: true, data: {} });
+    }
+  } catch(e) { res.status(500).json({ success: false }); }
+});
+
+app.post(`${BASE}/admin/ai/persona`, async (req, res) => {
+  try {
+    const { persona, tone, objective } = req.body;
+    const content = JSON.stringify({ persona, tone, objective });
+    const existing = await prisma.aiKnowledgeBase.findFirst({ where: { title: 'SYSTEM_PERSONA' } });
+    if (existing) {
+      await prisma.aiKnowledgeBase.update({ where: { id: existing.id }, data: { content } });
+    } else {
+      await prisma.aiKnowledgeBase.create({ data: { title: 'SYSTEM_PERSONA', content, isActive: true } });
+    }
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ success: false }); }
+});
+
+app.post(`${BASE}/admin/ai/scrape-url`, async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ success: false, message: 'URL хоосон байна' });
+    const response = await fetch(url);
+    const html = await response.text();
+    // Super basic HTML tag stripper to get raw text chunk
+    const text = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+                     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+                     .replace(/<[^>]+>/g, ' ')
+                     .replace(/\s+/g, ' ')
+                     .substring(0, 3000); // Take first 3000 characters to prevent overflow
+
+    await prisma.aiKnowledgeBase.create({ 
+      data: { 
+        title: `URL Scrape: ${url.substring(0, 50)}`, 
+        content: `Scraped from ${url}:\n\n${text}`, 
+        isActive: true 
+      } 
+    });
+    res.json({ success: true, message: 'URL амжилттай уншигдаж сурлаа!' });
+  } catch(err) {
+    res.status(500).json({ success: false, message: 'Хуудас руу хандаж унших боломжгүй байна.' });
+  }
+});
+
+app.post(`${BASE}/admin/ai/memory-correction`, async (req, res) => {
+  try {
+    const { correction } = req.body;
+    if (!correction) return res.status(400).json({ success: false });
+    await prisma.aiMemory.create({ data: { context: correction, type: 'rule' } });
+    res.json({ success: true, message: 'Шинэ дүрэм (Rule) AI-ийн санах ойд бичигдлээ!' });
+  } catch(err) { res.status(500).json({ success: false }); }
+});
+
 
 // ── POST /ai/agents/command — V24 Direct Manual Swarm Override
 app.post(`${BASE}/ai/agents/command`, async (req, res) => {
