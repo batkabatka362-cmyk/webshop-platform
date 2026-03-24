@@ -160,6 +160,7 @@ app.get(`${BASE}/storefront/me`, async (req, res) => {
 
 // ─── One-time Remote Seed Endpoint ────────────
 app.post(`${BASE}/admin/seed-once`, async (req, res) => {
+  if (process.env.NODE_ENV === 'production') return res.status(403).json({ success: false, message: 'Forbidden in production' });
   if (req.headers['x-seed-secret'] !== (process.env.SEED_SECRET || 'webshop-seed-2026')) {
     return res.status(403).json({ success: false, message: 'Forbidden' });
   }
@@ -378,6 +379,14 @@ app.post(`${BASE}/storefront/checkout`, async (req, res) => {
 
       return newOrder;
     });
+
+    // Simulate Order Confirmation Email
+    try {
+       const emailTarget = guestEmail || (customerId ? (await prisma.customer.findUnique({where:{id:customerId}}))?.email : null);
+       if (emailTarget) {
+         await prisma.systemEvent.create({ data: { eventType: 'ORDER_CONFIRMATION_EMAIL', sourceSystem: 'storefront', payload: { orderId: order.id, orderNumber: order.orderNumber, email: emailTarget, sentAt: new Date().toISOString() } } });
+       }
+    } catch(e) {}
 
     res.json({ success: true, orderId: order.id, grandTotal: order.grandTotal });
   } catch (err: any) {
@@ -2140,53 +2149,23 @@ app.use(`${BASE}/orders`, trackingRouter)
 // System info
 app.use(`${BASE}/system`, rateLimitRouter)
 
-// Ollama AI endpoints
-app.post(`${BASE}/ai/chat`, async (req, res) => {
-  try {
-    const { message } = req.body
-    
-    // Түр зуурын Cloud AI (Оллама GPU шаардах тул ухаалаг Mock хийв)
-    const lower = message.toLowerCase();
-    let reply = 'Уучлаарай, хиймэл оюуны холболт Cloud дээр үнэтэй тул одоогоор хязгаарлагдсан байна. Гэхдээ та манай дэлгүүрийн хайлтаар утас, компьютер зэрэг барааг хайж болно шүү.';
-    
-    if(lower.includes('сайн') || lower.includes('sain') || lower.includes('мэнд')) reply = 'Сайн байна уу! WEBSHOP - Монголын шилдэг онлайн дэлгүүрт тавтай морил. Танд юугаар туслах вэ? 🤖';
-    else if(lower.includes('утас') || lower.includes('utas') || lower.includes('iphone') || lower.includes('samsung')) reply = 'Бидэнд одоогоор хамгийн сүүлийн үеийн iPhone 15 Pro Max болон Samsung Galaxy S24 Ultra загварын утаснууд бэлэн байна. Та нүүр хуудасны "Утас" ангилал руу орж үзээрэй!';
-    else if(lower.includes('хүргэлт') || lower.includes('hurgelt') || lower.includes('hvreh')) reply = 'Бид Улаанбаатар хот дотор 24 цагийн дотор үнэгүй, орон нутагт 2-5 хоногийн дотор шуудангаар найдвартай хүргэж үйлчилж байна. 📦';
-    else if(lower.includes('үнэ') || lower.includes('une') || lower.includes('price')) reply = 'Манай бүх бараанууд Монгол дахь албан ёсны дистрибьютерийн баталгаат хамгийн хямд үнэтэй (үйлдвэрийн) байгаа бөгөөд та QPay ашиглан шууд төлж авах боломжтой!';
-    else if(lower.includes('баярлалаа') || lower.includes('bayarla')) reply = 'Танд ч бас баярлалаа! Инженер баг маань танд зориулж энэ вэбийг маш амжилттай бүтээлээ. Өөр асуух зүйл гарвал заавал хэлээрэй. 😊';
-
-    setTimeout(() => { res.json({ success: true, data: { reply } }) }, 1000);
-
-  } catch (err) {
-    res.json({ success: true, data: { reply: 'AI туслах худалдагч одоогоор офлайн байна. Та дараа дахин оролдоно уу.' } })
-  }
-})
 
 app.post(`${BASE}/ai/recommend`, async (req, res) => {
   try {
     const { productId, userHistory } = req.body
-    const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434'
-
-    // Fetch product and similar products
-    const product = productId
-      ? await prisma.product.findUnique({ where: { id: productId }, include: { category: true } })
-      : null
-
-    const allProducts = await prisma.product.findMany({
-      where: { status: 'active', deletedAt: null },
-      take: 50,
-      include: { category: true },
-    })
-
-    const response = await fetch(`${ollamaUrl}/api/generate`, {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const response = await fetch(`${AI_CONFIG.ollamaUrl}/api/generate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
+      signal: controller.signal,
       body: JSON.stringify({
-        model: process.env.OLLAMA_MODEL || 'llama3.2',
+        model: AI_CONFIG.ollamaModel,
         prompt: `Given the following product catalog:\n${allProducts.map(p => `- ${p.name} (${p.category?.name || 'Uncategorized'}, ₮${p.basePrice})`).join('\n')}\n\n${product ? `The user is viewing: ${product.name}` : ''}\n${userHistory ? `User history: ${JSON.stringify(userHistory)}` : ''}\n\nRecommend 3-5 products. Return ONLY a JSON array of product IDs like: ["id1","id2","id3"]`,
         stream: false,
       }),
     })
+    clearTimeout(timeout);
 
     const data = await response.json()
     let recommendedIds: string[] = []
@@ -2211,17 +2190,21 @@ app.post(`${BASE}/ai/recommend`, async (req, res) => {
 app.post(`${BASE}/ai/describe`, async (req, res) => {
   try {
     const { productName, category, features } = req.body
-    const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434'
+    const ollamaUrl = AI_CONFIG.ollamaUrl;
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
     const response = await fetch(`${ollamaUrl}/api/generate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
+      signal: controller.signal,
       body: JSON.stringify({
-        model: process.env.OLLAMA_MODEL || 'llama3.2',
+        model: AI_CONFIG.ollamaModel,
         prompt: `Write a compelling product description in Mongolian for an e-commerce store.\nProduct: ${productName}\nCategory: ${category || 'General'}\nFeatures: ${features || 'N/A'}\n\nWrite 2-3 sentences. Be concise and persuasive. Return ONLY the description text, no labels.`,
         stream: false,
       }),
     })
+    clearTimeout(timeout);
 
     const data = await response.json()
     res.json({ success: true, data: { description: data.response || '' } })
@@ -2236,6 +2219,7 @@ app.use('/media', express.static(process.env.MEDIA_STORAGE_PATH || './uploads'))
 
 // ─── Temporary DB Seeder ─────────────────
 app.get(`${BASE}/seed-db-temp`, async (req, res) => {
+  if (process.env.NODE_ENV === 'production') return res.status(403).json({ success: false, message: 'Forbidden in production' });
   try {
      const products = [
       { name: 'Samsung Galaxy S24 Ultra', basePrice: 2500000, desc: 'Хамгийн сүүлийн үеийн Samsung flagship утас.' },
