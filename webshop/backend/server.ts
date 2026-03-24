@@ -279,7 +279,7 @@ app.post(`${BASE}/storefront/checkout`, async (req, res) => {
       if (!dbProd) throw new Error(`Бараа олдсонгүй эсвэл идэвхгүй байна: ${i.name || baseId}`);
       
       const qty = Math.max(1, Math.floor(Number(i.qty) || 1));
-      const actualPrice = dbProd.discountPrice > 0 ? dbProd.discountPrice : dbProd.price;
+      const actualPrice = dbProd.basePrice;
       calculatedSubtotal += (actualPrice * qty);
       
       verifiedItems.push({
@@ -917,7 +917,7 @@ app.get(`${BASE}/ai/conglomerate/status`, async (_req, res) => {
       where: { product: { isAiGenerated: true } },
       include: { order: true }
     });
-    const totalAiRevenue = aiOrderItems.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0);
+    const totalAiRevenue = aiOrderItems.reduce((sum: number, item: any) => sum + ((item.unitPrice || item.price || 0) * (item.quantity || item.qty || 0)), 0);
     
     const usedPromosCount = aiPromos.filter((p: any) => p.isUsed).length;
     const totalPromos = aiPromos.length;
@@ -1738,6 +1738,15 @@ app.patch(`${BASE}/coupons/:id`, async (req, res) => {
 
 // V5 PHASE 2 ROUTES
 
+// Admin Stats — Revenue and Order Count
+app.get(`${BASE}/admin/stats`, async (_req, res) => {
+  try {
+    const revenue = await prisma.order.aggregate({ _sum: { grandTotal: true }, where: { status: { notIn: ['cancelled', 'deleted'] } } });
+    const orders = await prisma.order.count({ where: { status: { notIn: ['cancelled', 'deleted'] } } });
+    res.json({ success: true, data: { revenue: revenue._sum.grandTotal || 0, orders } });
+  } catch(err) { res.status(500).json({ success: false }); }
+});
+
 // Admin Funnel Aggregation — Real DB Aggregation
 app.get(`${BASE}/admin/funnel`, async (_req, res) => {
   try {
@@ -1756,7 +1765,15 @@ app.post(`${BASE}/marketing`, async (req, res) => {
   try {
     let delivered = 0;
     if (target === 'vip') {
-      delivered = await prisma.customer.count({ where: { segment: { contains: 'VIP' } } });
+      // Count customers with high LTV (orders > 1M) as VIP
+      const allCusts = await prisma.customer.findMany({ select: { id: true } });
+      let vipCount = 0;
+      for (const c of allCusts) {
+        const orders = await prisma.order.findMany({ where: { customerId: c.id }, select: { subtotal: true } });
+        const ltv = orders.reduce((s, o) => s + (o.subtotal || 0), 0);
+        if (ltv > 1000000) vipCount++;
+      }
+      delivered = vipCount || 1;
     } else if (target === 'sleeping') {
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const recentBuyers = await prisma.order.findMany({ where: { createdAt: { gte: thirtyDaysAgo }, customerId: { not: null } }, distinct: ['customerId'], select: { customerId: true } });
@@ -1817,7 +1834,9 @@ async function getDefaultAdmin() {
   if (defaultAdminId) return defaultAdminId;
   let admin = await prisma.adminUser.findFirst();
   if(!admin) {
-     admin = await prisma.adminUser.create({data: {email: 'admin@webshop.mn', passwordHash: '12345', firstName: 'Admin', lastName: 'User'}});
+     const bcryptLib = await import('bcrypt');
+     const hash = await bcryptLib.default.hash('Admin1234!', 12);
+     admin = await prisma.adminUser.create({data: {email: 'admin@webshop.mn', passwordHash: hash, firstName: 'Admin', lastName: 'User'}});
   }
   defaultAdminId = admin.id;
   return admin.id;
