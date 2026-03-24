@@ -868,3 +868,48 @@ model AiKnowledgeBase {
 
   @@map("ai_knowledge_base")
 }
+
+// ─────────────────────────────────────────────
+// V42: HEAVY ENTERPRISE ENGINE MODELS
+// ─────────────────────────────────────────────
+
+model BackgroundJob {
+  id        String    @id @default(uuid())
+  type      String    // e.g., 'email_blast', 'ai_bulk_generation'
+  payload   Json?
+  status    String    @default("pending") // "pending", "processing", "completed", "failed"
+  result    String?   @db.Text
+  error     String?   @db.Text
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  startedAt DateTime?
+  endedAt   DateTime?
+
+  @@index([status])
+  @@index([type])
+  @@map("background_jobs")
+}
+
+model SystemMetric {
+  id          String   @id @default(uuid())
+  cpuUsage    Float    // CPU percentage
+  ramUsed     Float    // RAM in MB
+  ramTotal    Float    // Total RAM in MB
+  queueLength Int      // Number of pending background jobs
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("system_metrics")
+}
+
+model ApiKey {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  name      String   // e.g., "Mobile App", "B2B Partner"
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  lastUsed  DateTime?
+
+  @@index([key])
+  @@map("api_keys")
+}

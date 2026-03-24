@@ -82,6 +82,7 @@ textarea.fi { resize:vertical; min-height:90px; line-height: 1.5; }
   <a href="javascript:void(0)" class="nav-item" id="nt-conglomerate" onclick="switchTab('conglomerate')" style="background:linear-gradient(135deg, rgba(16,185,129,0.1), rgba(52,211,153,0.1));color:#10b981;font-weight:600;margin-top:8px">🏬 AI Корпораци (V23)</a>
   <a href="javascript:void(0)" class="nav-item" id="nt-kb" onclick="switchTab('kb')" style="background:linear-gradient(135deg, rgba(234,179,8,0.1), rgba(245,158,11,0.1));color:#d97706;font-weight:600;margin-top:8px">📚 AI Мэдлэгийн Сан (V29)</a>
   <a href="javascript:void(0)" class="nav-item" id="nt-omni" onclick="switchTab('omni')" style="background:linear-gradient(135deg, rgba(236,72,153,0.1), rgba(244,63,94,0.1));color:#ec4899;font-weight:600;margin-top:8px">📢 AI Маркетинг (V31)</a>
+  <a href="javascript:void(0)" class="nav-item" id="nt-ops" onclick="switchTab('ops')" style="background:linear-gradient(135deg, rgba(56,189,248,0.1), rgba(2,132,199,0.1));color:#0284c7;font-weight:600;margin-top:8px">⚡ Системийн Хяналт (Heavy Ops)</a>
   <a href="index.html" class="nav-item" style="margin-top:auto" onclick="localStorage.removeItem('ws_admin_token');localStorage.removeItem('ws_token')">← Системээс гарах (Logout)</a>
 </aside>
 
@@ -611,6 +612,56 @@ textarea.fi { resize:vertical; min-height:90px; line-height: 1.5; }
   </div>
 </div>
 
+  <!-- V42 HEAVY OPS VIEW -->
+  <div id="view-ops" style="display:none">
+    <header style="margin-bottom:24px">
+      <h1>⚡ Системийн Ачаалал & Хяналт (Heavy Ops)</h1>
+      <p style="color:var(--dim);margin-top:4px">V42 Enterprise Engine: Server Metrics, Background Workers, and Ext API Keys</p>
+    </header>
+    
+    <div style="display:flex;gap:24px;margin-bottom:24px">
+      <div style="background:var(--surface);padding:24px;border-radius:12px;flex:1;border:1px solid var(--smoke)">
+        <div style="color:var(--dim);font-size:13px;text-transform:uppercase;margin-bottom:8px">CPU АЧААЛАЛ (AVG)</div>
+        <div style="font-size:28px;font-weight:600;font-family:monospace;color:#0ea5e9" id="ops-cpu">--%</div>
+      </div>
+      <div style="background:var(--surface);padding:24px;border-radius:12px;flex:1;border:1px solid var(--smoke)">
+        <div style="color:var(--dim);font-size:13px;text-transform:uppercase;margin-bottom:8px">САНАХ ОЙ (RAM USED)</div>
+        <div style="font-size:28px;font-weight:600;font-family:monospace;color:#8b5cf6" id="ops-ram">-- MB / -- MB</div>
+      </div>
+      <div style="background:var(--surface);padding:24px;border-radius:12px;flex:1;border:1px solid var(--smoke)">
+        <div style="color:var(--dim);font-size:13px;text-transform:uppercase;margin-bottom:8px">ХҮЛЭЭГДЭЖ БУЙ АЖИЛ</div>
+        <div style="font-size:28px;font-weight:600;font-family:monospace;color:#f59e0b" id="ops-qlen">--</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:40px">
+      <div style="background:var(--surface);border-radius:12px;border:1px solid var(--smoke);overflow:hidden">
+        <div style="padding:16px 24px;border-bottom:1px solid var(--smoke);background:var(--bg);display:flex;justify-content:space-between;align-items:center">
+          <strong style="font-size:14px">Арын Ажлын Цуваа (Background Jobs)</strong>
+          <button class="btn-ghost" style="background:#0284c7;color:#fff;font-size:11px" onclick="testHeavyJob()">+ Тест Ажил үүсгэх</button>
+        </div>
+        <table style="box-shadow:none">
+          <thead><tr><th>Төрөл</th><th>Төлөв</th><th>Үр дүн</th></tr></thead>
+          <tbody id="ops-jobs"><tr><td colspan="3" style="text-align:center;color:var(--dim);padding:20px">Уншиж байна...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div style="background:var(--surface);border-radius:12px;border:1px solid var(--smoke);overflow:hidden">
+        <div style="padding:16px 24px;border-bottom:1px solid var(--smoke);background:var(--bg);display:flex;justify-content:space-between;align-items:center">
+          <strong style="font-size:14px">Гадаад Холболт (External API Keys)</strong>
+        </div>
+        <div style="padding:16px;display:flex;gap:12px;border-bottom:1px solid var(--smoke)">
+          <input type="text" id="ops-api-name" class="fi" style="flex:1" placeholder="API холболтын нэр (Mobile App, POS...)">
+          <button class="btn" style="padding:10px 16px" onclick="generateApiKey()">Холболт үүсгэх</button>
+        </div>
+        <table style="box-shadow:none">
+          <thead><tr><th>Нэр</th><th>Токен (x-api-key)</th><th>Устгах</th></tr></thead>
+          <tbody id="ops-keys"><tr><td colspan="3" style="text-align:center;color:var(--dim);padding:20px">Уншиж байна...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -675,7 +726,7 @@ async function loadLogs() {
 }
 
 // Routing
-const ALL_TABS = ['products', 'orders', 'customers', 'abandoned', 'marketing', 'coupons', 'suppliers', 'logs', 'settings', 'ai', 'conglomerate', 'kb', 'omni'];
+const ALL_TABS = ['products', 'orders', 'customers', 'abandoned', 'marketing', 'coupons', 'suppliers', 'logs', 'settings', 'ai', 'conglomerate', 'kb', 'omni', 'ops'];
 function switchTab(t) {
   ALL_TABS.forEach(x => { document.getElementById('nt-'+x).classList.remove('active'); document.getElementById('view-'+x).style.display = 'none'; });
   document.getElementById('nt-'+t).classList.add('active'); document.getElementById('view-'+t).style.display = 'block';
@@ -691,6 +742,7 @@ function switchTab(t) {
   if(t === 'ai') loadAiStatus();
   if(t === 'kb') loadKb();
   if(t === 'omni') loadOmni();
+  if(t === 'ops') { loadOpsMetrics(); loadOpsJobs(); loadOpsKeys(); }
   if(t === 'conglomerate') { document.getElementById('ai-conglomerate-promos').innerHTML='Уншиж байна...'; document.getElementById('ai-conglomerate-products').innerHTML='Уншиж байна...'; loadConglomerate(); }
 }
 function showT(m){ const e = document.getElementById('toast'); e.textContent = m; e.classList.add('on'); setTimeout(()=>e.classList.remove('on'), 3500); }
@@ -1157,6 +1209,37 @@ async function initChart() {
 function initApp() {
   loadCats(); loadProds(); initChart();
 }
+// V42 HEAVY OPS DASHBOARD
+async function loadOpsMetrics() {
+  try {
+    const r=await window.fetch(API+'/api/v1/admin/ops/metrics'); const d=await r.json();
+    if(d.success && d.data[0]) {
+      document.getElementById('ops-cpu').textContent = (d.data[0].cpuUsage * 100).toFixed(1) + '%';
+      document.getElementById('ops-ram').textContent = d.data[0].ramUsed.toFixed(0) + ' MB / ' + d.data[0].ramTotal.toFixed(0) + ' MB';
+      document.getElementById('ops-qlen').textContent = d.data[0].queueLength;
+    } else { document.getElementById('ops-cpu').textContent='Хүлээгдэж байна...'; }
+  } catch{}
+}
+async function loadOpsJobs() {
+  try {
+    const r=await window.fetch(API+'/api/v1/admin/ops/jobs'); const d=await r.json();
+    if(d.success && d.data.length) {
+      document.getElementById('ops-jobs').innerHTML = d.data.map(j=>`<tr><td style="font-weight:600">${j.type}</td><td><span style="background:${j.status==='completed'?'#dcfce7':'#fef08a'};color:${j.status==='completed'?'#166534':'#ca8a04'};padding:2px 6px;border-radius:4px;font-size:11px">${j.status}</span></td><td style="font-size:12px;color:var(--dim)">${j.result||'-'}</td></tr>`).join('');
+    } else { document.getElementById('ops-jobs').innerHTML='<tr><td colspan="3" style="text-align:center;color:var(--dim)">Ажил алга</td></tr>'; }
+  } catch{}
+}
+async function testHeavyJob() { await window.fetch(API+'/api/v1/admin/ops/test-job', {method:'POST'}); showT('Арын цуваанд хүнд процесс амжилттай нэмэгдлээ!'); loadOpsJobs(); }
+async function loadOpsKeys() {
+  try {
+    const r=await window.fetch(API+'/api/v1/admin/ops/api-keys'); const d=await r.json();
+    if(d.success && d.data.length) {
+      document.getElementById('ops-keys').innerHTML = d.data.map(k=>`<tr><td style="font-weight:600">${k.name}</td><td style="font-size:12px;font-family:monospace;color:var(--dim)">${k.key}</td><td><button class="btn-ghost del-btn" onclick="delApiKey('${k.id}')">Устгах</button></td></tr>`).join('');
+    } else { document.getElementById('ops-keys').innerHTML='<tr><td colspan="3" style="text-align:center;color:var(--dim)">Токен байхгүй</td></tr>'; }
+  } catch{}
+}
+async function generateApiKey() { const n=document.getElementById('ops-api-name').value; if(!n) return showT('Нэр оруулна уу'); await window.fetch(API+'/api/v1/admin/ops/api-keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})}); document.getElementById('ops-api-name').value=''; showT('Амжилттай үүслээ'); loadOpsKeys(); }
+async function delApiKey(id) { await window.fetch(API+'/api/v1/admin/ops/api-keys/'+id,{method:'DELETE'}); loadOpsKeys(); }
+
 // Boot checks
 const _adminToken = localStorage.getItem('ws_admin_token') || localStorage.getItem('ws_token');
 if(!_adminToken) { document.getElementById('login-screen').style.display = 'flex'; }

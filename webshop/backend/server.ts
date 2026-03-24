@@ -16,6 +16,7 @@ import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import nodemailer from 'nodemailer'
+import os from 'os'
 
 // ─── Mailer Utility ───────────────────────────
 const mailer = nodemailer.createTransport({
@@ -50,6 +51,78 @@ export const prisma = new PrismaClient({
 
 // Make prisma available globally for repositories that use `declare const prisma`
 ;(global as any).prisma = prisma
+
+// ─── V42: HEAVY ENTERPRISE CACHE MANAGER ──────
+export class CacheManager {
+  private cache = new Map<string, { value: any, expiresAt: number }>();
+  
+  get(key: string) {
+    const item = this.cache.get(key);
+    if (!item) return null;
+    if (Date.now() > item.expiresAt) {
+      this.cache.delete(key);
+      return null;
+    }
+    return item.value;
+  }
+  
+  set(key: string, value: any, ttlSeconds: number = 60) {
+    this.cache.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
+  }
+
+  del(key: string) { this.cache.delete(key); }
+  clear() { this.cache.clear(); }
+}
+export const AppCache = new CacheManager();
+
+// ─── V42: ASYNC BACKGROUND JOB QUEUE ──────────
+export async function runJobWorker() {
+  console.log('[V42] Heavy Job Worker Started (Tick: 10s)');
+  setInterval(async () => {
+    try {
+      const job = await prisma.backgroundJob.findFirst({ where: { status: 'pending' }, orderBy: { createdAt: 'asc' } });
+      if (!job) return;
+      
+      await prisma.backgroundJob.update({ where: { id: job.id }, data: { status: 'processing', startedAt: new Date() } });
+      
+      // Simulate heavy processing based on job type
+      if (job.type === 'email_blast') {
+        const payload = job.payload as any;
+        console.log(`[JOB WORKER] Processing Email Blast for ${payload.count || 0} users...`);
+        await new Promise(r => setTimeout(r, 3000)); // Heavy IO simulation
+      } else if (job.type === 'ai_bulk_generation') {
+        console.log(`[JOB WORKER] Processing AI Bulk Generation...`);
+        await new Promise(r => setTimeout(r, 5000)); // Heavy AI generation simulation
+      }
+      
+      await prisma.backgroundJob.update({ where: { id: job.id }, data: { status: 'completed', endedAt: new Date(), result: 'Success' } });
+    } catch (err: any) {
+      console.error('[JOB WORKER ERROR]', err);
+    }
+  }, 10000);
+}
+
+// ─── V42: SYSTEM OPS MONITORING ───────────────
+export function runSystemMonitor() {
+  setInterval(async () => {
+    try {
+      const cpus = os.cpus();
+      const cpuUsage = cpus.reduce((acc, cpu) => {
+        const total = Object.values(cpu.times).reduce((a, b) => a + b, 0);
+        const idle = cpu.times.idle;
+        return acc + (1 - idle / total);
+      }, 0) / cpus.length;
+      
+      const ramTotal = os.totalmem() / 1024 / 1024;
+      const ramUsed = (os.totalmem() - os.freemem()) / 1024 / 1024;
+      const queueLength = await prisma.backgroundJob.count({ where: { status: 'pending' } });
+      
+      await prisma.systemMetric.create({
+        data: { cpuUsage: parseFloat(cpuUsage.toFixed(4)), ramUsed, ramTotal, queueLength }
+      });
+    } catch (e) { /* ignore monitor fail */ }
+  }, 60000 * 5); // Every 5 minutes instead of 60s to save DB space
+}
 
 // ─── Import Routes ────────────────────────────
 import { checkoutRouter } from './checkout-system/controllers'
@@ -114,6 +187,21 @@ app.get('/health', async (_req, res) => {
 })
 
 // ─── API Routes ───────────────────────────────
+
+// V42: EXTERNAL API SECURITY (Third-Party Integrations)
+const apiKeyAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const key = req.headers['x-api-key'] || req.query.apiKey;
+  if (!key) return res.status(401).json({ success: false, message: 'API Key missing' });
+  const apiKey = await prisma.apiKey.findUnique({ where: { key: String(key) } });
+  if (!apiKey || !apiKey.isActive) return res.status(401).json({ success: false, message: 'Invalid API Key' });
+  
+  await prisma.apiKey.update({ where: { id: apiKey.id }, data: { lastUsed: new Date() } });
+  next();
+};
+
+app.get(`${BASE}/external/test`, apiKeyAuth, (req, res) => {
+  res.json({ success: true, message: 'Heavy Enterprise API Connected. Welcome B2B Partner!' });
+});
 
 // V9 Frontend Authentication
 const STOREFRONT_SECRET = process.env.JWT_SECRET || 'webshop_jwt_secret_999';
@@ -1164,6 +1252,55 @@ app.patch(`${BASE}/ai/config`, async (req, res) => {
   } catch(err) { res.status(500).json({ success: false }); }
 });
 
+
+// ─── V42 HEAVY OPS DASHBOARD ENDPOINTS ─────────
+
+app.get(`${BASE}/admin/ops/metrics`, async (_req, res) => {
+  try {
+    const metrics = await prisma.systemMetric.findMany({ orderBy: { createdAt: 'desc' }, take: 20 });
+    res.json({ success: true, data: metrics });
+  } catch(e) { res.status(500).json({ success: false }); }
+});
+
+app.get(`${BASE}/admin/ops/jobs`, async (_req, res) => {
+  try {
+    const jobs = await prisma.backgroundJob.findMany({ orderBy: { createdAt: 'desc' }, take: 10 });
+    res.json({ success: true, data: jobs });
+  } catch(e) { res.status(500).json({ success: false }); }
+});
+
+app.post(`${BASE}/admin/ops/test-job`, async (req, res) => {
+  try {
+    const job = await prisma.backgroundJob.create({ 
+      data: { type: 'email_blast', payload: { count: 10000, template: 'black_friday' } } 
+    });
+    res.json({ success: true, message: 'Heavy background task queued!', docId: job.id });
+  } catch(e) { res.status(500).json({ success: false }); }
+});
+
+app.get(`${BASE}/admin/ops/api-keys`, async (_req, res) => {
+  try {
+    const keys = await prisma.apiKey.findMany({ orderBy: { createdAt: 'desc' } });
+    res.json({ success: true, data: keys });
+  } catch(e) { res.status(500).json({ success: false }); }
+});
+
+app.post(`${BASE}/admin/ops/api-keys`, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if(!name) return res.status(400).json({ success: false });
+    const key = `WS-` + Math.random().toString(36).substring(2, 10).toUpperCase() + '-' + Date.now();
+    const doc = await prisma.apiKey.create({ data: { name, key } });
+    res.json({ success: true, data: doc });
+  } catch(e) { res.status(500).json({ success: false }); }
+});
+
+app.delete(`${BASE}/admin/ops/api-keys/:id`, async (req, res) => {
+  try {
+    await prisma.apiKey.delete({ where: { id: req.params.id }});
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ success: false }); }
+});
 
 // ── GET /admin/settings — Load store settings
 app.get(`${BASE}/admin/settings`, async (_req, res) => {
@@ -2425,6 +2562,10 @@ async function bootstrap() {
   try {
     await prisma.$connect()
     console.info('✅ Database connected')
+    
+    // V42: Start heavy enterprise workers
+    runJobWorker();
+    runSystemMonitor();
 
     app.listen(PORT, () => {
       console.info(`
