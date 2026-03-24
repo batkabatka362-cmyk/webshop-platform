@@ -738,8 +738,20 @@ const AI_TOOLS = {
       cancelledOrders++;
     }
     
-    const msg = `AI Хянагч (Self-Heal): ${fixedInventory} ширхэг галзуурсан хуурамч нөөц тэгшиллээ. ${cancelledOrders} ширхэг гацсан захиалгыг цуцаллаа.`;
-    await saveAiLog('SystemAudit', 'audit_and_heal', { fixedInventory, cancelledOrders });
+    // 3. V40 AI Fraud Detection
+    const pendingToScan = await prisma.order.findMany({ where: { fraudScore: 0, status: 'pending' }, include: { items: true }, take: 10 });
+    let fraudCaught = 0;
+    for (const o of pendingToScan) {
+      let score = 0; let reason = [];
+      const qty = o.items.reduce((s: number, i: any) => s + i.quantity, 0);
+      if (qty > 10) { score += 40; reason.push("Их хэмжээний сагс"); }
+      if (o.grandTotal > 5000000) { score += 50; reason.push("Хэт өндөр дүн"); }
+      if (score > 80) fraudCaught++;
+      await prisma.order.update({ where: { id: o.id }, data: { fraudScore: score || 1, fraudReason: reason.length ? reason.join(', ') : 'OK' } });
+    }
+
+    const msg = `AI Хянагч: ${fixedInventory} нөөц тэгшилж, ${cancelledOrders} гацсан захиалга цуцалж, ${fraudCaught} луйвар илрүүллээ.`;
+    await saveAiLog('SystemAudit', 'audit_and_heal', { fixedInventory, cancelledOrders, fraudCaught });
     return msg;
   }
 };
@@ -834,6 +846,32 @@ app.post(`${BASE}/ai/agents/toggle`, async (req, res) => {
   res.json({ success: true, active: watcherActive, message: watcherActive ? "Agent ажиллаж эхэллээ." : "Agent зогслоо." });
 });
 
+// ── V40: AI Live Brain Feed (Storefront Ticker)
+app.get(`${BASE}/storefront/ai/live-feed`, async (_req, res) => {
+  try {
+    const logs = await prisma.aiAgentLog.findMany({ take: 5, orderBy: { createdAt: 'desc' } });
+    res.json({ success: true, data: logs });
+  } catch(e) { res.status(500).json({ success: false }); }
+});
+
+// ── V40: Admin Manual Fraud Scan API
+app.post(`${BASE}/admin/ai/fraud-scan`, async (_req, res) => {
+  try {
+    const pendingToScan = await prisma.order.findMany({ where: { status: 'pending' }, include: { items: true }, take: 50 });
+    let fraudCaught = 0;
+    for (const o of pendingToScan) {
+      let score = 0; let reason = [];
+      const qty = o.items.reduce((s: number, i: any) => s + i.quantity, 0);
+      if (qty > 10) { score += 40; reason.push("Их хэмжээний сагс"); }
+      if (o.grandTotal > 5000000) { score += 50; reason.push("Хэт өндөр дүн"); }
+      if (score > 80) fraudCaught++;
+      await prisma.order.update({ where: { id: o.id }, data: { fraudScore: score || 1, fraudReason: reason.length ? reason.join(', ') : 'OK' } });
+    }
+    await saveAiLog('SystemAudit', 'manual_fraud_scan', { fraudCaught, scanned: pendingToScan.length });
+    res.json({ success: true, scanned: pendingToScan.length, fraudCaught, message: `${pendingToScan.length} захиалга шалгаж, ${fraudCaught} зөрчил илрүүллээ.` });
+  } catch(e) { res.status(500).json({ success: false }); }
+});
+
 // Supplier CRUD — persisted to Database
 app.get(`${BASE}/suppliers`, async (_req, res) => {
   try {
@@ -868,13 +906,19 @@ app.delete(`${BASE}/suppliers/:id`, async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 app.post(`${BASE}/storefront/ai/chat`, async (req, res) => {
   try {
-    const { message, chatHistory } = req.body;
+    const { message, chatHistory, context } = req.body;
     
     // V29: Fetch Knowledge Base (RAG)
     const kbDocs = await prisma.aiKnowledgeBase.findMany({ where: { isActive: true } });
     const kbContext = kbDocs.length > 0 
       ? "\nБАЙГУУЛЛАГЫН МЭДЛЭГИЙН САН (ҮҮНИЙГ АШИГЛАН АСУУЛТАД ХАРИУЛНА УУ):\n" + kbDocs.map((d: any) => `--- ${d.title} ---\n${d.content}`).join("\n\n")
       : "";
+
+    // V40 Context Injection
+    const contextualDocs = context ? `\nХЭРЭГЛЭГЧИЙН НӨХЦӨЛ БАЙДАЛ:
+- Одоо үзэж буй хуудас/дэлгэц: ${context.url || 'Тодорхойгүй'}
+- Сагсанд байгаа бараанууд: ${context.cart ? JSON.stringify(context.cart) : 'Хоосон'}
+- Үйлдэл: Үүн дээр тулгуурлан хэрэглэгчид тохирсон санал тавих эсвэл тусламж санал болгож болно.` : '';
 
     // We give the AI the persona of a powerful salesman
     const sysPrompt = `Та WEBSHOP-ийн Шийдвэр гаргах эрхтэй Ахлах Борлуулагч (Negotiator AI). 
@@ -884,7 +928,7 @@ app.post(`${BASE}/storefront/ai/chat`, async (req, res) => {
 2. Хэрэв үйлчлүүлэгч үнэтэй байна гэж эргэлзвэл 5% эсвэл 10% хямдрал өгч болно.
 3. ХЯМДРАЛ ӨГӨХӨӨР БОЛБОЛ өөрийн хариулт дотроо [PROMO:10] гэж бичээрэй (10 хувь бол).
 4. Богино, оновчтой бай.
-5. Дэлгүүртэй холбоотой түгээмэл асуултуудад МЭДЛЭГИЙН САН дотроос харж хариулна.${kbContext}`;
+5. Дэлгүүртэй холбоотой түгээмэл асуултуудад МЭДЛЭГИЙН САН дотроос харж хариулна.${kbContext}${contextualDocs}`;
 
     const fullPrompt = `Өмнөх яриа: ${chatHistory || 'Байхгүй'}\n\nХэрэглэгч: ${message}\nBорлуулагч:`;
     const aiResponseText = await aiCall(fullPrompt, sysPrompt);
