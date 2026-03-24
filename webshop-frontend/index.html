@@ -568,6 +568,9 @@ body.light-mode nav.s{background:rgba(255,255,255,.85)}
   </div>
 </nav>
 
+<!-- AI INJECTION: home_banner -->
+<div id="home_banner"></div>
+
 <section class="hero">
   <div class="hero-inner">
     <div class="hero-kicker"><div class="hk-dash"></div><span class="hk-t">WEBSHOP 2026 — AI SYSTEM</span></div>
@@ -1884,6 +1887,21 @@ updCart = function() {
   updShipBar();
 };
 updShipBar();
+
+// V30: Hyper-Personalization Server-Driven UI
+async function fetchAiUI() {
+  try {
+    const r = await fetch(API+'/api/v1/storefront/ai/components');
+    const d = await r.json();
+    if(d.success && d.data) {
+      d.data.forEach(c => {
+        const el = document.getElementById(c.location);
+        if(el) el.innerHTML = c.html;
+      });
+    }
+  }catch(e){}
+}
+fetchAiUI();
 
 // 🤖 V23 AI NEGOTIATOR CHATBOT UI
 const chatHTML = `

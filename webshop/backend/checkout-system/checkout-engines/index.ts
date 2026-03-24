@@ -97,11 +97,10 @@ export class CheckoutValidationEngine {
     const issues: { productName: string; requested: number; available: number }[] = []
 
     for (const item of items) {
-      // Real inventory check
       const invRecord = await prisma.inventory.findFirst({ where: { productId: item.variantId ?? item.productId } })
       const stock = invRecord
         ? { available: Math.max(0, invRecord.quantity - invRecord.reserved), allowBackorder: invRecord.allowBackorder }
-        : { available: 999, allowBackorder: false }
+        : { available: 0, allowBackorder: false } // [V27 FIX]: Assume 0 stock if no inventory record exists (Phantom Inventory Bug)
 
       if (!stock.allowBackorder && stock.available < item.quantity) {
         issues.push({

@@ -149,6 +149,45 @@ model StockReservation {
   @@map("stock_reservations")
 }
 
+// ─────────────────────────────────────────────
+// SUPPLIERS
+// ─────────────────────────────────────────────
+
+model Supplier {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?
+  email     String?
+  status    String   @default("\u04a2\u0438\u0442\u043c\u044d\u044d\u043b \u0430\u0436\u0438\u043b\u043b\u0430\u0436 \u0431\u0430\u0439\u043d\u0430")
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@map("suppliers")
+}
+
+// ─────────────────────────────────────────────
+// SUPPLY (AI DRIVEN)
+// ─────────────────────────────────────────────
+
+model SupplyOrder {
+  id          String   @id @default(uuid())
+  productId   String
+  quantity    Int
+  status      String   @default("DRAFT") // DRAFT, ORDERED, COMPLETED
+  aiSuggested Boolean  @default(true)
+  reason      String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  product     Product  @relation(fields: [productId], references: [id])
+
+  @@index([status])
+  @@index([productId])
+  @@map("supply_orders")
+}
+
 model StockHistory {
   id            String   @id @default(uuid())
   inventoryId   String
@@ -387,6 +426,8 @@ model Order {
   shippingMethod  Json
   trackingNumber  String?
   notes           String?
+  fraudScore      Int       @default(0)
+  fraudReason     String?   @db.Text
   placedAt        DateTime
   confirmedAt     DateTime?
   processedAt     DateTime?
@@ -811,4 +852,19 @@ model ChatPromoCode {
   createdAt   DateTime @default(now())
 
   @@map("chat_promo_codes")
+}
+
+// ─────────────────────────────────────────────
+// V29: AI KNOWLEDGE BASE (Chatbot RAG)
+// ─────────────────────────────────────────────
+
+model AiKnowledgeBase {
+  id        String   @id @default(uuid())
+  title     String
+  content   String   @db.Text
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("ai_knowledge_base")
 }

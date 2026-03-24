@@ -121,6 +121,121 @@ dashboardRouter.get('/stats', handle(async (_req, res) => {
   })
 }))
 
+dashboardRouter.post('/ai/predict-inventory', handle(async (req, res) => {
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+  // 1. Get all active products with their current inventory
+  const products = await prisma.product.findMany({
+    where: { status: 'active', deletedAt: null },
+    include: { inventory: true },
+  })
+
+  const generatedDRAFTS = []
+
+  for (const p of products) {
+    if (!p.inventory) continue
+
+    // 2. Calculate 30-day Sales Velocity atomically
+    const sales = await prisma.orderItem.aggregate({
+      where: {
+        productId: p.id,
+        order: {
+          paymentStatus: 'paid',
+          createdAt: { gte: thirtyDaysAgo }
+        }
+      },
+      _sum: { quantity: true }
+    })
+
+    const sold30d = sales._sum.quantity || 0
+    const dailyVelocity = sold30d / 30
+
+    // 3. Threshold check: Less than 14 days of stock remaining?
+    if (dailyVelocity > 0 && p.inventory.quantity < (dailyVelocity * 14)) {
+      
+      // 4. Concurrency Safety: Is there already a DRAFT order pending?
+      const existingDraft = await prisma.supplyOrder.findFirst({
+        where: { productId: p.id, status: 'DRAFT' }
+      })
+
+      if (!existingDraft) {
+        // 5. LLM Prediction (Fallbacks safely if offline)
+        let suggestedQty = Math.ceil(dailyVelocity * 30) // Fallback default
+        let reason = `System detected high velocity: ${sold30d} sold last month. Stock will deplete in <14 days.`
+        
+        try {
+          const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434'
+          const prompt = `Product: ${p.name}. Stock: ${p.inventory.quantity}. Sold in 30 days: ${sold30d}. Daily velocity: ${dailyVelocity.toFixed(2)}. Suggest restock quantity for next 30 days. Reply ONLY in JSON format: {"suggestedQuantity": N, "reason": "..."}`
+          
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 10000)
+          
+          const response = await fetch(`${ollamaUrl}/api/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: process.env.OLLAMA_MODEL || 'llama3.2', prompt, stream: false }),
+            signal: controller.signal
+          })
+          clearTimeout(timeoutId)
+          
+          if (response.ok) {
+            const data = await response.json()
+            const jsonText = data.response.replace(/```json/g, '').replace(/```/g, '').trim()
+            const result = JSON.parse(jsonText)
+            if (result.suggestedQuantity) suggestedQty = result.suggestedQuantity
+            if (result.reason) reason = result.reason
+          }
+        } catch (e) {
+          // LLM fail -> use the static mathematical fallback computed above
+        }
+
+        // 6. Create DRAFT SupplyOrder (Atomic insert)
+        const order = await prisma.supplyOrder.create({
+          data: {
+            productId: p.id,
+            quantity: suggestedQty,
+            reason: reason,
+            aiSuggested: true,
+            status: 'DRAFT'
+          }
+        })
+        await logActivity(req, 'ai_predict', 'supply_order', order.id)
+        generatedDRAFTS.push(order)
+      }
+    }
+  }
+
+  res.json({ success: true, data: { generated: generatedDRAFTS.length, orders: generatedDRAFTS } })
+}))
+
+dashboardRouter.get('/supply-orders', handle(async (req, res) => {
+  const orders = await prisma.supplyOrder.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: { product: { include: { inventory: true } } }
+  })
+  res.json({ success: true, data: orders })
+}))
+
+dashboardRouter.post('/supply-orders/:id/approve', handle(async (req, res) => {
+  const order = await prisma.supplyOrder.findUnique({ where: { id: req.params.id } })
+  if (!order || order.status !== 'DRAFT') throw Object.assign(new Error('Invalid order'), { statusCode: 400 })
+
+  // Atomic transaction: Approve order and increment inventory
+  const [approvedOrder] = await prisma.$transaction([
+    prisma.supplyOrder.update({ where: { id: order.id }, data: { status: 'COMPLETED' } }),
+    prisma.inventory.update({
+      where: { productId: order.productId },
+      data: { quantity: { increment: order.quantity } }
+    }),
+    prisma.adminActivity.create({
+      data: { adminId: (req as any).admin.id, action: 'approve', resource: 'supply_order', resourceId: order.id, ipAddress: req.ip }
+    })
+  ])
+  
+  res.json({ success: true, data: approvedOrder })
+}))
+
 // ═══════════════════════════════════════════════
 // PRODUCT ADMIN ROUTES
 // ═══════════════════════════════════════════════

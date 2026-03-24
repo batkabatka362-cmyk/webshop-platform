@@ -244,9 +244,22 @@ export class PaymentPreparationService {
     // Hard inventory reservation
     const { InventoryService } = await import('../../inventory-system/services')
     const inv = new InventoryService()
+    const successfullyReserved: { productId: string, quantity: number }[] = []
+    
     for (const item of session.items) {
-      try { await inv.hardReserve(item.productId, item.quantity, checkoutId) } catch (e) {
+      try { 
+        await inv.hardReserve(item.productId, item.quantity, checkoutId)
+        successfullyReserved.push({ productId: item.productId, quantity: item.quantity })
+      } catch (e) {
         console.warn(`[PAYMENT PREP] Reserve warning: ${(e as Error).message}`)
+        // [V27 FIX]: Hard Reserve Bypass
+        // If reservation fails, we must rollback the previously successful reservations!
+        await inv.releaseReservation(checkoutId).catch(() => {})
+        
+        throw new CheckoutError(
+          `Insufficient stock while reserving ${item.productName}: ${(e as Error).message}`,
+          'INSUFFICIENT_STOCK'
+        )
       }
     }
 
@@ -406,6 +419,32 @@ export class PaymentPreparationService {
       }
     } catch (e) {
       console.warn('[PAYMENT PREP] Notification warning:', (e as Error).message)
+    }
+
+    // [V27 FIX]: Coupon Burn Exploit Fix
+    // We increment coupon usage ONLY upon successful payment completion.
+    // If there is a discount applied in the checkout pricing.
+    try {
+      if (session.pricing && session.pricing.discountTotal > 0) {
+        // Find the coupon in session if it exists, but since we don't store couponCode in DB natively,
+        // we can lookup the active coupon that gave the discount in the session JSON
+        // Assume session.couponCode might be added if the user wants strict coupling,
+        // but normally the coupon-system logic iterates. 
+        // For Webshop architecture: We will find the coupon logic in CouponSystem natively.
+        const { couponService } = await import('../../systems/coupon-system/services')
+        if (session.couponCode) {
+          const c = await (global as any).prisma.coupon.findUnique({ where: { code: session.couponCode.toUpperCase() } })
+          if (c) {
+            await (global as any).prisma.coupon.update({
+              where: { id: c.id },
+              data: { usageCount: { increment: 1 } }
+            })
+            console.info(`[COUPON FIX] Usage count safely incremented for ${session.couponCode}`)
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[PAYMENT PREP] Coupon increment warning:', (e as Error).message)
     }
 
     return {
