@@ -17,11 +17,20 @@ export class ShippingTrackingService {
     const order = await prisma.order.findUnique({ where: { id: orderId } })
     if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404 })
 
-    if (!['pending', 'confirmed', 'processing'].includes(order.status)) {
+    if (!['paid', 'processing'].includes(order.status) || order.paymentStatus !== 'paid') {
       throw Object.assign(
-        new Error(`Cannot ship order in '${order.status}' status`),
+        new Error(`STRICT RULE VIOLATION: Cannot ship unpaid or '${order.status}' orders. Must be PAID.`),
         { statusCode: 422 }
       )
+    }
+
+    if (!dto.trackingNumber || dto.trackingNumber.trim() === '') {
+      throw Object.assign(new Error('STRICT RULE VIOLATION: Tracking number is strictly REQUIRED to mark an order as SHIPPED.'), { statusCode: 422 })
+    }
+
+    const addr = order.shippingAddress as Record<string, any>
+    if (!addr || !addr.city || !addr.addressLine1 || (!addr.phone && !order.guestPhone)) {
+      throw Object.assign(new Error('STRICT RULE VIOLATION: Order missing structurally bound shipping data (city, addressLine1, phone). Free-text addresses are forbidden.'), { statusCode: 422 })
     }
 
     const now = new Date()
@@ -116,13 +125,33 @@ export class ShippingTrackingService {
    * Update shipping status (in_transit, delivered).
    */
   async updateStatus(
-    orderId:     string,
-    status:      ShippingStatus,
-    location?:   string,
-    description?: string
+    orderId:      string,
+    status:       ShippingStatus,
+    location?:    string,
+    description?: string,
+    adminId?:     string
   ): Promise<TrackingInfo> {
     const shipping = await prisma.shipping.findUnique({ where: { orderId } })
     if (!shipping) throw Object.assign(new Error('Shipping record not found'), { statusCode: 404 })
+
+    const order = await prisma.order.findUnique({ where: { id: orderId } })
+    if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404 })
+
+    // STRICT FORWARD-ONLY TRANSITION ENFORCEMENT
+    // allowed[currentStatus] = set of valid next statuses
+    const allowedTransitions: Record<string, ShippingStatus[]> = {
+      processing:  ['shipped'],
+      shipped:     ['in_transit', 'delivered'],
+      in_transit:  ['delivered'],
+      delivered:   [],
+    }
+    const currentStatus = shipping.status as ShippingStatus
+    if (!allowedTransitions[currentStatus]?.includes(status)) {
+      throw Object.assign(
+        new Error(`Forbidden Transition: Cannot move shipping from '${currentStatus}' to '${status}'`),
+        { statusCode: 422 }
+      )
+    }
 
     const now = new Date()
     const updateData: any = { status }
@@ -130,12 +159,19 @@ export class ShippingTrackingService {
     if (status === 'delivered') {
       updateData.deliveredAt = now
       // Also update order
-      const order = await prisma.order.update({
+      await prisma.order.update({
         where: { id: orderId },
         data:  { status: 'delivered', deliveredAt: now },
       })
       await prisma.orderStatusHistory.create({
-        data: { orderId, status: 'delivered', previousStatus: 'shipped', actorType: 'system', note: 'Package delivered' },
+        data: { 
+          orderId, 
+          status: 'delivered', 
+          previousStatus: order.status, 
+          actorId: adminId, 
+          actorType: adminId ? 'admin' : 'system', 
+          note: description || 'Package confirmed delivered' 
+        },
       })
       // Delivery notification
       try {
@@ -156,7 +192,7 @@ export class ShippingTrackingService {
         shippingId:  shipping.id,
         status,
         location,
-        description: description || `Status updated to ${status}`,
+        description: `[Admin: ${adminId || 'System'}] ` + (description || `Status updated to ${status}`),
         occurredAt:  now,
       },
     })

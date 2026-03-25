@@ -331,7 +331,7 @@ export class PaymentSelectionEngine {
     gateway:    string,
     amount:     number,
     currency:   string,
-    checkoutId: string
+    orderId:    string
   ): Promise<PaymentSessionResult> {
     this.validatePaymentMethod(gateway)
 
@@ -340,11 +340,11 @@ export class PaymentSelectionEngine {
       const { PaymentService } = await import('../../payment-system/services')
       const paymentSvc = new PaymentService()
       const result = await paymentSvc.createPayment({
-        orderId:    checkoutId,
+        orderId:    orderId,
         gateway,
         amount,
         currency,
-        checkoutId,
+        checkoutId: orderId, // Legacy compat
       })
 
       return {
@@ -358,8 +358,8 @@ export class PaymentSelectionEngine {
 
       // Fallback if PaymentService fails (e.g. QPay not configured)
       return {
-        paymentSessionId: `ps_${checkoutId}`,
-        paymentUrl:       gateway === 'qpay' ? `https://qpay.mn/payment/${checkoutId}` : undefined,
+        paymentSessionId: `ps_${orderId}`,
+        paymentUrl:       gateway === 'qpay' ? `https://qpay.mn/payment/${orderId}` : undefined,
         qrCode:           undefined,
         expiresAt:        new Date(Date.now() + 15 * 60 * 1000).toISOString(),
       }

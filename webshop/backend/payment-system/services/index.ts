@@ -191,6 +191,15 @@ export class PaymentService {
   }
 
   async markPaid(paymentId: string, gatewayPaymentId?: string) {
+    const payment = await prisma.payment.findUnique({ where: { id: paymentId } })
+    if (!payment) throw new Error('Payment not found')
+    
+    // STRICT IDEMPOTENCY GUARD
+    if (payment.status === 'paid') {
+      console.info(`[PAYMENT SYSTEM] Payment ${paymentId} already marked as paid. Doing nothing to prevent duplicates.`)
+      return
+    }
+
     await prisma.payment.update({
       where: { id: paymentId },
       data:  { status: 'paid', paidAt: new Date(), gatewayRef: gatewayPaymentId || undefined },
@@ -199,14 +208,72 @@ export class PaymentService {
       data: {
         paymentId,
         type: 'capture',
-        amount: (await prisma.payment.findUnique({ where: { id: paymentId } }))!.amount,
-        currency: 'MNT',
-        note: 'Payment captured',
+        amount: payment.amount,
+        currency: payment.currency,
+        note: 'Payment captured via Webhook/S2S verification',
       },
     })
     await prisma.paymentHistory.create({
       data: { paymentId, eventType: 'paid', rawPayload: { gatewayPaymentId }, source: 'gateway' },
     })
+
+    // FULFILL THE ORDER 
+    // This is the SINGLE SOURCE OF TRUTH for successful payment completion.
+    console.info(`[PAYMENT SYSTEM] Payment verified structurally for ${paymentId}. Fulfilling Order...`)
+    const { OrderService } = await import('../../order-system/services')
+    const orderSvc = new OrderService()
+    
+    // Find the order referenced by this payment.
+    if (payment.orderId) {
+      try {
+        const o = await orderSvc.getOrder(payment.orderId)
+        if (o && o.status === 'pending') {
+          // STRICT STATE MACHINE UPDATE
+          await orderSvc.updateStatus(payment.orderId, 'paid', 'system', 'system', 'Payment verified securely from Gateway Webhook')
+          await prisma.order.update({
+            where: { id: payment.orderId },
+            data: { paymentStatus: 'paid' }
+          })
+        }
+
+        // FIND CORRESPONDING CHECKOUT TO RESOLVE INVENTORY & COUPONS
+        const cp = await prisma.checkoutPayment.findFirst({ where: { paymentSessionId: paymentId } })
+        if (cp?.checkoutId) {
+           const checkoutId = cp.checkoutId
+           
+           // Confirm inventory deductions securely from backend
+           try {
+             const { InventoryService } = await import('../../inventory-system/services')
+             const invSvc = new InventoryService()
+             await invSvc.confirmReservation(checkoutId)
+           } catch (e) {
+             console.warn('[WEBHOOK.INVENTORY] Confirmation failed:', e)
+           }
+
+           // Notify Customer
+           try {
+             const { notificationService } = await import('../../systems/notification-system/services')
+             if (o?.guestEmail) {
+                await notificationService.onOrderCreated(o.guestEmail, {
+                  orderNumber: o.orderNumber,
+                  grandTotal:  o.grandTotal,
+                  customerName: 'Customer', // No name stored locally in basic schema
+                }, o.customerId || undefined)
+
+                await notificationService.onPaymentSuccess(o.guestEmail, {
+                  orderNumber: o.orderNumber,
+                  amount:      o.grandTotal,
+                  gateway:     payment.gateway || 'qpay',
+                }, o.customerId || undefined)
+             }
+           } catch (e) {
+             console.warn('[WEBHOOK.NOTIFY] Failed:', e)
+           }
+        }
+      } catch (e) {
+        console.error(`[WEBHOOK.CRITICAL] Failed to fulfill order ${payment.orderId}:`, e)
+      }
+    }
   }
 
   async processRefund(paymentId: string, amount: number, reason?: string) {

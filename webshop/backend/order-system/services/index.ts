@@ -100,8 +100,26 @@ export class OrderRepository {
     const order = await prisma.order.findUnique({ where: { id } })
     if (!order) throw new Error('Order not found')
 
+    // EXACT STATE MACHINE ENFORCEMENT
+    const allowedTransitions: Record<string, string[]> = {
+      'pending': ['paid', 'cancelled'],
+      'paid': ['processing', 'cancelled'],
+      'processing': ['shipped', 'cancelled'],
+      'shipped': ['delivered'],
+      'delivered': [],
+      'completed': [],
+      'cancelled': []
+    }
+    
+    // Ignore updates that don't change status to prevent idempotency bugs
+    if (order.status === status) return order;
+
+    if (!allowedTransitions[order.status]?.includes(status)) {
+      throw new Error(`Forbidden transition: Cannot move order from ${order.status} to ${status}`);
+    }
+
     const statusField: any = {}
-    if (status === 'confirmed')  statusField.confirmedAt  = new Date()
+    if (status === 'confirmed')  statusField.confirmedAt  = new Date() // Keeping for compat
     if (status === 'processing') statusField.processedAt  = new Date()
     if (status === 'shipped')    statusField.shippedAt    = new Date()
     if (status === 'delivered')  statusField.deliveredAt  = new Date()
@@ -173,7 +191,7 @@ export class OrderService {
       guestEmail:     dto.guestEmail,
       guestPhone:     dto.guestPhone,
       status:         'pending',
-      paymentStatus:  'paid',
+      paymentStatus:  'pending',
       paymentId:      dto.paymentId,
       currency:       checkout.currency,
       subtotal:       checkout.subtotal,

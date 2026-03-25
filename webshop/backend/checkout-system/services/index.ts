@@ -241,7 +241,7 @@ export class PaymentPreparationService {
     // Final price revalidation
     await checkoutValidationEngine.priceRevalidation(session.items)
 
-    // Hard inventory reservation
+    // Hard inventory reservation (creates a lock but doesn't deduct quantity)
     const { InventoryService } = await import('../../inventory-system/services')
     const inv = new InventoryService()
     const successfullyReserved: { productId: string, quantity: number }[] = []
@@ -252,8 +252,6 @@ export class PaymentPreparationService {
         successfullyReserved.push({ productId: item.productId, quantity: item.quantity })
       } catch (e) {
         console.warn(`[PAYMENT PREP] Reserve warning: ${(e as Error).message}`)
-        // [V27 FIX]: Hard Reserve Bypass
-        // If reservation fails, we must rollback the previously successful reservations!
         await inv.releaseReservation(checkoutId).catch(() => {})
         
         throw new CheckoutError(
@@ -263,21 +261,7 @@ export class PaymentPreparationService {
       }
     }
 
-    // Prepare payment session with gateway
-    const paymentSession = await paymentSelectionEngine.preparePaymentSession(
-      session.paymentGateway,
-      session.pricing.grandTotal,
-      session.currency,
-      checkoutId
-    )
-
-    // Update session
-    session.status           = 'pending_payment'
-    session.paymentSessionId = paymentSession.paymentSessionId
-    session.idempotencyKey   = idempotencyKey
-    await checkoutSessionManager.updateSession(session)
-
-    // Persist to DB
+    // Persist checkout to DB FIRST so the Order can read it
     await checkoutRepo.create({
       id:            checkoutId,
       cartId:        session.cartId,
@@ -298,6 +282,40 @@ export class PaymentPreparationService {
     if (session.shippingAddress) {
       await checkoutAddressRepo.upsertShipping(checkoutId, session.shippingAddress)
     }
+
+    // CREATE THE ORDER INSTANTLY (Status: PENDING)
+    const { OrderService } = await import('../../order-system/services')
+    const orderServiceInstance = new OrderService()
+    let order: any
+    try {
+      order = await orderServiceInstance.createOrder({
+        checkoutId,
+        customerId:  session.customerId,
+        guestEmail:  session.customerInfo?.email,
+        guestPhone:  session.customerInfo?.phone,
+        paymentId:   'pending_gateway',
+        currency:    session.currency ?? 'MNT',
+      })
+    } catch (err) {
+      // Rollback reservations
+      await inv.releaseReservation(checkoutId).catch(() => {})
+      throw new CheckoutError(`Order creation failed before payment: ${(err as Error).message}`, 'ORDER_CREATION_FAILED', 500)
+    }
+
+    // Prepare payment session with gateway using the ACTUAL order.id
+    const paymentSession = await paymentSelectionEngine.preparePaymentSession(
+      session.paymentGateway,
+      session.pricing.grandTotal,
+      session.currency,
+      order.id
+    )
+
+    // Update session
+    session.status           = 'pending_payment'
+    session.paymentSessionId = paymentSession.paymentSessionId
+    session.idempotencyKey   = idempotencyKey
+    await checkoutSessionManager.updateSession(session)
+
     await checkoutPaymentRepo.create({
       checkoutId,
       gateway:         session.paymentGateway,
@@ -306,154 +324,56 @@ export class PaymentPreparationService {
       currency:        session.currency,
     })
 
+    // Clear the cart securely now that Order is created
+    if (session.cartId) {
+      // Bypass import cycle via raw DB call since we're in the prep stage
+      await (global as any).prisma.cart.update({ where: { id: session.cartId }, data: { status: 'converted' } }).catch(() => {})
+      await checkoutCartLink.unlockCart(session.cartId).catch(() => {})
+    }
+
     return {
       success:         true,
       checkoutId,
       status:          'pending_payment',
       paymentUrl:      paymentSession.paymentUrl,
       paymentQrCode:   paymentSession.qrCode,
-      message:         'Payment initiated successfully',
+      message:         'Payment initiated successfully. Order generated.',
     }
   }
 
   /**
-   * Called by Payment System when payment is confirmed.
-   * Creates the Order and finalizes the checkout.
-   *
-   * INTEGRATION FIX 1:
-   *   - Removed mock orderId (`ord_${checkoutId}`) — now calls orderService.createOrder()
-   *   - Passes real session data (items, addresses, pricing) to order creation
-   *   - Guards against missing session with try/catch (session may have expired)
-   *   - Marks checkout completed only AFTER order is successfully created
+   * Called by Frontend when user finishes payment loop.
+   * THIS MUST BE A READ-ONLY VIEW! The webhook is the source of truth.
    */
   async handlePaymentSuccess(checkoutId: string, paymentId: string): Promise<CheckoutResultDTO> {
-    // Load session — if expired, fall back to persisted checkout data
-    let session: any
-    try {
-      session = await checkoutSessionManager.loadSession(checkoutId)
-    } catch {
-      // Session expired from Redis — read from DB (checkout was persisted at confirmAndInitiatePayment)
-      const persistedCheckout = await checkoutRepo.findById(checkoutId)
-      if (!persistedCheckout) {
-        throw new CheckoutError(
-          `Checkout ${checkoutId} not found — cannot create order`,
-          'CHECKOUT_NOT_FOUND',
-          404
-        )
-      }
-      // Use persisted data to reconstruct minimal session context
-      session = persistedCheckout
+    const existingCheckout = await checkoutRepo.findById(checkoutId)
+    if (!existingCheckout) {
+      throw new CheckoutError('Checkout not found', 'CHECKOUT_NOT_FOUND', 404)
     }
 
-    // Import orderService here to avoid circular import at module load time
-    // When OrderSystem is fully wired via service registry, replace with:
-    // const { orderService } = serviceRegistry.resolve('order-system')
     const { OrderService } = await import('../../order-system/services')
-    const orderServiceInstance = new OrderService()
-
-    // Build CreateOrderDTO from checkout session data
-    const createOrderDTO = {
-      checkoutId,
-      customerId:  session.customerId,
-      guestEmail:  session.customerInfo?.email,
-      guestPhone:  session.customerInfo?.phone,
-      paymentId,
-      currency:    session.currency ?? 'MNT',
+    const orderSvc = new OrderService()
+    
+    // Find the order that was linked to this checkout.
+    // Since we created it earlier, we can find it by checkoutId (which was passed earlier but the schema didn't link directly to checkoutId).
+    // Let's lookup via CheckoutPayment to get the paymentSessionId, which maps to orderId in Payment DB!
+    const cp = await (global as any).prisma.checkoutPayment.findUnique({ where: { checkoutId } })
+    let orderRecord: any = null
+    
+    // Read the Order
+    if (cp?.paymentSessionId) {
+      const p = await (global as any).prisma.payment.findUnique({ where: { id: cp.paymentSessionId } })
+      if (p?.orderId) orderRecord = await orderSvc.getOrder(p.orderId)
     }
 
-    let order: any
-    try {
-      order = await orderServiceInstance.createOrder(createOrderDTO)
-    } catch (err) {
-      // Order creation failed — mark checkout as failed, do NOT mark completed
-      await checkoutRepo.updateStatus(checkoutId, 'payment_failed')
-      throw new CheckoutError(
-        `Order creation failed after payment: ${(err as Error).message}`,
-        'ORDER_CREATION_FAILED',
-        500
-      )
-    }
-
-    // Finalize checkout only after order exists
-    await checkoutRepo.markCompleted(checkoutId, order.id)
-
-    // Update Redis session status if still alive
-    try {
-      const liveSession = await checkoutSessionManager.loadSession(checkoutId)
-      liveSession.status = 'completed'
-      await checkoutSessionManager.updateSession(liveSession)
-    } catch {
-      // Session already expired — DB is source of truth, this is non-fatal
-    }
-
-    // Mark cart as converted
-    if (session.cartId) {
-      await (global as any).prisma.cart.update({ where: { id: session.cartId }, data: { status: 'converted' } }).catch(() => {})
-    }
-
-    // Confirm inventory reservations (deduct stock permanently)
-    try {
-      const { InventoryService } = await import('../../inventory-system/services')
-      const invSvc = new InventoryService()
-      await invSvc.confirmReservation(checkoutId)
-    } catch (e) {
-      console.warn('[PAYMENT PREP] Inventory confirm warning:', (e as Error).message)
-    }
-
-    // Send order confirmation notification
-    try {
-      const { notificationService } = await import('../../systems/notification-system/services')
-      const customerEmail = session.customerInfo?.email
-      if (customerEmail) {
-        await notificationService.onOrderCreated(customerEmail, {
-          orderNumber:  order.orderNumber,
-          grandTotal:   session.pricing?.grandTotal ?? 0,
-          customerName: `${session.customerInfo?.firstName || ''} ${session.customerInfo?.lastName || ''}`.trim(),
-        }, session.customerId)
-
-        await notificationService.onPaymentSuccess(customerEmail, {
-          orderNumber: order.orderNumber,
-          amount:      session.pricing?.grandTotal ?? 0,
-          gateway:     session.paymentGateway || 'qpay',
-        }, session.customerId)
-      }
-    } catch (e) {
-      console.warn('[PAYMENT PREP] Notification warning:', (e as Error).message)
-    }
-
-    // [V27 FIX]: Coupon Burn Exploit Fix
-    // We increment coupon usage ONLY upon successful payment completion.
-    // If there is a discount applied in the checkout pricing.
-    try {
-      if (session.pricing && session.pricing.discountTotal > 0) {
-        // Find the coupon in session if it exists, but since we don't store couponCode in DB natively,
-        // we can lookup the active coupon that gave the discount in the session JSON
-        // Assume session.couponCode might be added if the user wants strict coupling,
-        // but normally the coupon-system logic iterates. 
-        // For Webshop architecture: We will find the coupon logic in CouponSystem natively.
-        const { couponService } = await import('../../systems/coupon-system/services')
-        if (session.couponCode) {
-          const c = await (global as any).prisma.coupon.findUnique({ where: { code: session.couponCode.toUpperCase() } })
-          if (c) {
-            await (global as any).prisma.coupon.update({
-              where: { id: c.id },
-              data: { usageCount: { increment: 1 } }
-            })
-            console.info(`[COUPON FIX] Usage count safely incremented for ${session.couponCode}`)
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('[PAYMENT PREP] Coupon increment warning:', (e as Error).message)
-    }
-
+    // Default response assuming webhook will handle true fulfillment
     return {
       success:     true,
       checkoutId,
-      status:      'completed',
-      orderId:     order.id,
-      orderNumber: order.orderNumber,
-      message:     'Order placed successfully',
+      status:      orderRecord?.paymentStatus === 'paid' ? 'completed' : 'pending_payment',
+      orderId:     orderRecord?.id,
+      orderNumber: orderRecord?.orderNumber,
+      message:     orderRecord?.paymentStatus === 'paid' ? 'Payment verified securely!' : 'Validating payment asynchronously via gateway...',
     }
   }
 

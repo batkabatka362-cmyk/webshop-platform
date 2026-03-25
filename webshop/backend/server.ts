@@ -124,6 +124,49 @@ export function runSystemMonitor() {
   }, 60000 * 5); // Every 5 minutes instead of 60s to save DB space
 }
 
+// ─── V42: SELF-HEALING RECOVERY WORKER ────────
+export function runSystemRecoveryWorker() {
+  setInterval(async () => {
+    try {
+      // 1. Recover Stuck Orders (Payment was successful but order is stuck)
+      const stuckOrders = await prisma.order.findMany({
+        where: { status: 'pending' }
+      });
+      
+      for (const order of stuckOrders) {
+        const payment = await prisma.payment.findFirst({ 
+          where: { orderId: order.id, status: 'paid' } 
+        });
+        
+        if (payment) {
+          console.warn(`[RECOVERY] Healing stuck order ${order.id}. Payment was successful but order was hanging.`);
+          const { OrderService } = await import('./order-system/services');
+          const orderSvc = new OrderService();
+          
+          await orderSvc.updateStatus(order.id, 'paid', 'system', 'system', 'Recovered by Self-Healing Worker');
+          await prisma.order.update({ where: { id: order.id }, data: { paymentStatus: 'paid' } });
+          
+          const cp = await prisma.checkoutPayment.findFirst({ where: { paymentSessionId: payment.id } });
+          if (cp?.checkoutId) {
+             const { InventoryService } = await import('./inventory-system/services');
+             await new InventoryService().confirmReservation(cp.checkoutId).catch(() => {});
+          }
+        }
+      }
+
+      // 2. Recover Inventory (Automatically clean expired reservations and restore original stock)
+      const { InventoryService } = await import('./inventory-system/services');
+      const invResult = await new InventoryService().cleanExpiredReservations();
+      if (invResult.cleaned > 0) {
+         console.log(`[RECOVERY] Restored ${invResult.cleaned} abandoned inventory reservations.`);
+      }
+
+    } catch (e) { 
+      console.error('[RECOVERY ERROR]', (e as Error).message);
+    }
+  }, 60000); // Run every 60s
+}
+
 // ─── Import Routes ────────────────────────────
 import { checkoutRouter } from './checkout-system/controllers'
 import { cartRouter } from './cart-system/controllers'
@@ -2566,6 +2609,7 @@ async function bootstrap() {
     // V42: Start heavy enterprise workers
     runJobWorker();
     runSystemMonitor();
+    runSystemRecoveryWorker(); // <-- The self-healing loop
 
     app.listen(PORT, () => {
       console.info(`
