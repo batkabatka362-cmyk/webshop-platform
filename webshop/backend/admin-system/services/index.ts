@@ -221,13 +221,20 @@ dashboardRouter.post('/supply-orders/:id/approve', handle(async (req, res) => {
   const order = await prisma.supplyOrder.findUnique({ where: { id: req.params.id } })
   if (!order || order.status !== 'DRAFT') throw Object.assign(new Error('Invalid order'), { statusCode: 400 })
 
-  // Atomic transaction: Approve order and increment inventory
+  // Use InventoryService for safe stock update — validates thresholds, logs history, and updates status
+  const { InventoryService } = await import('../inventory-system/services')
+  const invSvc = new InventoryService()
+  await invSvc.adjustStock(
+    order.productId,
+    order.quantity,
+    'supply_approved',
+    order.id,
+    `Supply order #${order.id} approved by admin ${(req as any).admin.id}`
+  )
+
+  // Commit supply order status in a separate atomic transaction
   const [approvedOrder] = await prisma.$transaction([
     prisma.supplyOrder.update({ where: { id: order.id }, data: { status: 'COMPLETED' } }),
-    prisma.inventory.update({
-      where: { productId: order.productId },
-      data: { quantity: { increment: order.quantity } }
-    }),
     prisma.adminActivity.create({
       data: { adminId: (req as any).admin.id, action: 'approve', resource: 'supply_order', resourceId: order.id, ipAddress: req.ip }
     })
@@ -344,11 +351,16 @@ productAdminRouter.get('/customers', handle(async (req, res) => {
   res.json({ success: true, data: { items, total, page, limit } })
 }))
 
-// Activity log
+// Activity log — NEVER silently fail (audit must be reliable)
 async function logActivity(req: Request, action: string, resource: string, resourceId?: string) {
   const adminId = (req as any).admin?.id
   if (!adminId) return
-  await prisma.adminActivity.create({
-    data: { adminId, action, resource, resourceId, ipAddress: req.ip },
-  }).catch(() => {})
+  try {
+    await prisma.adminActivity.create({
+      data: { adminId, action, resource, resourceId, ipAddress: req.ip },
+    })
+  } catch (err) {
+    // Audit log failure is CRITICAL — surface in server error log
+    console.error(`[ADMIN AUDIT FAILURE] Failed to log: admin=${adminId} action=${action} resource=${resource}/${resourceId}`, err)
+  }
 }

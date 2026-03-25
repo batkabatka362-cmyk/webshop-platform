@@ -27,6 +27,13 @@ export interface CreateOrderDTO {
   currency?:    string
 }
 
+// ADMIN-ONLY STATUS TRANSITIONS — only these are allowed via admin API
+const ADMIN_ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  'paid':        ['processing'],
+  'processing':  ['shipped'],
+  'shipped':     ['delivered'],
+}
+
 // ═══════════════════════════════════════════════
 // ORDER NUMBER GENERATOR
 // ═══════════════════════════════════════════════
@@ -303,17 +310,54 @@ orderRouter.get('/:id', handle(async (req, res) => {
   res.json({ success: true, data: order })
 }))
 
-// PATCH /orders/:id/status — Update status (admin)
+// PATCH /orders/:id/status — Admin-controlled status update (strict validation)
+const AdminStatusUpdateSchema = z.object({
+  status: z.enum(['processing', 'shipped', 'delivered']),
+  note:   z.string().max(500).optional(),
+})
+
 orderRouter.patch('/:id/status', handle(async (req, res) => {
-  const { status, note } = req.body
-  const adminId = (req as any).admin?.id || req.headers['x-admin-id'] as string
-  const order = await orderService.updateStatus(req.params.id, status, adminId, 'admin', note)
+  const adminId = (req as any).admin?.id
+  if (!adminId) {
+    return res.status(403).json({ success: false, error: { message: 'Admin authentication required to update order status' } })
+  }
+
+  // Validate input — reject unknown statuses at the API gateway layer
+  const dto = AdminStatusUpdateSchema.safeParse(req.body)
+  if (!dto.success) {
+    return res.status(422).json({ success: false, error: { message: `Invalid status: ${dto.error.errors.map(e => e.message).join(', ')}` } })
+  }
+
+  // Enforce admin transition rules — fetch current order first
+  const existing = await prisma.order.findUnique({ where: { id: req.params.id } })
+  if (!existing) return res.status(404).json({ success: false, error: { message: 'Order not found' } })
+
+  const allowed = ADMIN_ALLOWED_TRANSITIONS[existing.status] || []
+  if (!allowed.includes(dto.data.status)) {
+    return res.status(422).json({
+      success: false,
+      error: { message: `Admin cannot transition order from '${existing.status}' to '${dto.data.status}'. Forbidden by system contract.` }
+    })
+  }
+
+  // Additional rule: PROCESSING→SHIPPED requires tracking number
+  if (dto.data.status === 'shipped' && !existing.trackingNumber) {
+    return res.status(422).json({
+      success: false,
+      error: { message: 'Order must have a tracking number before it can be marked SHIPPED. Use the /ship endpoint instead.' }
+    })
+  }
+
+  const order = await orderService.updateStatus(req.params.id, dto.data.status, adminId, 'admin', dto.data.note)
   res.json({ success: true, data: order })
 }))
 
-// POST /orders/:id/cancel
+// POST /orders/:id/cancel — Customer self-cancel (requires authenticated customer token)
 orderRouter.post('/:id/cancel', handle(async (req, res) => {
-  const customerId = (req as any).user?.id || req.headers['x-customer-id'] as string
+  const customerId = (req as any).user?.id
+  if (!customerId) {
+    return res.status(401).json({ success: false, error: { message: 'Customer authentication required to cancel an order' } })
+  }
   const order = await orderService.cancelOrder(req.params.id, customerId, req.body.reason)
   res.json({ success: true, data: order })
 }))
