@@ -7,6 +7,7 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { PrismaClient } from '@prisma/client'
 import crypto from 'crypto'
+import { Logger } from '../../middleware/logger'
 
 declare const prisma: PrismaClient
 
@@ -196,7 +197,7 @@ export class PaymentService {
     
     // STRICT IDEMPOTENCY GUARD
     if (payment.status === 'paid') {
-      console.info(`[PAYMENT SYSTEM] Payment ${paymentId} already marked as paid. Doing nothing to prevent duplicates.`)
+      Logger.warn('PAYMENT', 'markPaid.duplicate.blocked', { paymentId, orderId: payment.orderId })
       return
     }
 
@@ -219,7 +220,7 @@ export class PaymentService {
 
     // FULFILL THE ORDER 
     // This is the SINGLE SOURCE OF TRUTH for successful payment completion.
-    console.info(`[PAYMENT SYSTEM] Payment verified structurally for ${paymentId}. Fulfilling Order...`)
+    Logger.info('PAYMENT', 'payment.confirmed', { paymentId, orderId: payment.orderId, amount: payment.amount, gateway: payment.gateway })
     const { OrderService } = await import('../../order-system/services')
     const orderSvc = new OrderService()
     
@@ -247,7 +248,7 @@ export class PaymentService {
              const invSvc = new InventoryService()
              await invSvc.confirmReservation(checkoutId)
            } catch (e) {
-             console.warn('[WEBHOOK.INVENTORY] Confirmation failed:', e)
+              Logger.error('PAYMENT', 'webhook.inventory.confirm.failed', { paymentId, checkoutId }, e)
            }
 
            // Notify Customer
@@ -267,11 +268,11 @@ export class PaymentService {
                 }, o.customerId || undefined)
              }
            } catch (e) {
-             console.warn('[WEBHOOK.NOTIFY] Failed:', e)
+              Logger.error('PAYMENT', 'webhook.notification.failed', { paymentId }, e)
            }
         }
       } catch (e) {
-        console.error(`[WEBHOOK.CRITICAL] Failed to fulfill order ${payment.orderId}:`, e)
+        Logger.error('PAYMENT', 'webhook.order.fulfillment.failed', { paymentId, orderId: payment.orderId }, e)
       }
     }
   }
@@ -318,7 +319,7 @@ paymentRouter.get('/:id', handle(async (req, res) => {
 }))
 
 paymentRouter.post('/callback', handle(async (req, res) => {
-  console.info('[PAYMENT] Callback received:', JSON.stringify(req.body))
+  Logger.info('PAYMENT', 'webhook.callback.received', { body: req.body })
   await prisma.paymentHistory.create({
     data: { eventType: 'callback', rawPayload: req.body, source: 'gateway' },
   })

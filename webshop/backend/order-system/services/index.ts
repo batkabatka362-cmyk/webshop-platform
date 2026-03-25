@@ -8,6 +8,7 @@ import { Router, Request, Response, NextFunction } from 'express'
 import { PrismaClient } from '@prisma/client'
 import crypto from 'crypto'
 import { z } from 'zod'
+import { Logger } from '../../middleware/logger'
 
 declare const prisma: PrismaClient
 
@@ -144,6 +145,14 @@ export class OrderRepository {
         },
       }),
     ])
+
+    Logger.info('ORDER', 'order.status.changed', {
+      orderId: id,
+      from: order.status,
+      to: status,
+      actorId,
+      actorType,
+    })
 
     return this.findById(id)
   }

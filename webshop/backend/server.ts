@@ -17,6 +17,7 @@ import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import nodemailer from 'nodemailer'
 import os from 'os'
+import { Logger } from './middleware/logger'
 
 // ─── Mailer Utility ───────────────────────────
 const mailer = nodemailer.createTransport({
@@ -77,27 +78,32 @@ export const AppCache = new CacheManager();
 
 // ─── V42: ASYNC BACKGROUND JOB QUEUE ──────────
 export async function runJobWorker() {
-  console.log('[V42] Heavy Job Worker Started (Tick: 10s)');
+  Logger.info('JOB_WORKER', 'worker.started', { tickMs: 10000 })
   setInterval(async () => {
+    let job: any = null
     try {
-      const job = await prisma.backgroundJob.findFirst({ where: { status: 'pending' }, orderBy: { createdAt: 'asc' } });
+      job = await prisma.backgroundJob.findFirst({ where: { status: 'pending' }, orderBy: { createdAt: 'asc' } });
       if (!job) return;
       
       await prisma.backgroundJob.update({ where: { id: job.id }, data: { status: 'processing', startedAt: new Date() } });
-      
-      // Simulate heavy processing based on job type
+      Logger.info('JOB_WORKER', 'job.started', { jobId: job.id, type: job.type })
+
       if (job.type === 'email_blast') {
         const payload = job.payload as any;
-        console.log(`[JOB WORKER] Processing Email Blast for ${payload.count || 0} users...`);
-        await new Promise(r => setTimeout(r, 3000)); // Heavy IO simulation
+        Logger.info('JOB_WORKER', 'job.processing.email_blast', { jobId: job.id, userCount: payload.count || 0 })
+        await new Promise(r => setTimeout(r, 3000));
       } else if (job.type === 'ai_bulk_generation') {
-        console.log(`[JOB WORKER] Processing AI Bulk Generation...`);
-        await new Promise(r => setTimeout(r, 5000)); // Heavy AI generation simulation
+        Logger.info('JOB_WORKER', 'job.processing.ai_bulk', { jobId: job.id })
+        await new Promise(r => setTimeout(r, 5000));
       }
       
       await prisma.backgroundJob.update({ where: { id: job.id }, data: { status: 'completed', endedAt: new Date(), result: 'Success' } });
+      Logger.info('JOB_WORKER', 'job.completed', { jobId: job.id, type: job.type })
     } catch (err: any) {
-      console.error('[JOB WORKER ERROR]', err);
+      Logger.error('JOB_WORKER', 'job.failed', { jobId: job?.id, type: job?.type }, err)
+      if (job?.id) {
+        await prisma.backgroundJob.update({ where: { id: job.id }, data: { status: 'failed', endedAt: new Date(), error: err?.message } }).catch(() => {})
+      }
     }
   }, 10000);
 }
@@ -120,18 +126,25 @@ export function runSystemMonitor() {
       await prisma.systemMetric.create({
         data: { cpuUsage: parseFloat(cpuUsage.toFixed(4)), ramUsed, ramTotal, queueLength }
       });
-    } catch (e) { /* ignore monitor fail */ }
-  }, 60000 * 5); // Every 5 minutes instead of 60s to save DB space
+
+      if (cpuUsage > 0.9) {
+        Logger.warn('SYSTEM_MONITOR', 'cpu.high', { cpuUsage, ramUsedMb: Math.round(ramUsed) })
+      }
+      if (queueLength > 50) {
+        Logger.warn('SYSTEM_MONITOR', 'job_queue.backlog', { queueLength })
+      }
+    } catch (e) {
+      Logger.error('SYSTEM_MONITOR', 'metric.save.failed', {}, e)
+    }
+  }, 60000 * 5);
 }
 
 // ─── V42: SELF-HEALING RECOVERY WORKER ────────
 export function runSystemRecoveryWorker() {
+  Logger.info('RECOVERY_WORKER', 'worker.started', { tickMs: 60000 })
   setInterval(async () => {
     try {
-      // 1. Recover Stuck Orders (Payment was successful but order is stuck)
-      const stuckOrders = await prisma.order.findMany({
-        where: { status: 'pending' }
-      });
+      const stuckOrders = await prisma.order.findMany({ where: { status: 'pending' } });
       
       for (const order of stuckOrders) {
         const payment = await prisma.payment.findFirst({ 
@@ -139,34 +152,34 @@ export function runSystemRecoveryWorker() {
         });
         
         if (payment) {
-          console.warn(`[RECOVERY] Healing stuck order ${order.id}. Payment was successful but order was hanging.`);
+          Logger.warn('RECOVERY_WORKER', 'order.stuck.detected', { orderId: order.id, paymentId: payment.id })
           const { OrderService } = await import('./order-system/services');
           const orderSvc = new OrderService();
           
           await orderSvc.updateStatus(order.id, 'paid', 'system', 'system', 'Recovered by Self-Healing Worker');
           await prisma.order.update({ where: { id: order.id }, data: { paymentStatus: 'paid' } });
+          Logger.info('RECOVERY_WORKER', 'order.healed', { orderId: order.id })
           
           const cp = await prisma.checkoutPayment.findFirst({ where: { paymentSessionId: payment.id } });
           if (cp?.checkoutId) {
              const { InventoryService } = await import('./inventory-system/services');
              await new InventoryService().confirmReservation(cp.checkoutId).catch((e: any) => {
-               console.error('[RECOVERY.INVENTORY] Failed to confirm reservation for', cp.checkoutId, e?.message)
+               Logger.error('RECOVERY_WORKER', 'inventory.confirm.failed', { checkoutId: cp.checkoutId }, e)
              });
           }
         }
       }
 
-      // 2. Recover Inventory (Automatically clean expired reservations and restore original stock)
       const { InventoryService } = await import('./inventory-system/services');
       const invResult = await new InventoryService().cleanExpiredReservations();
       if (invResult.cleaned > 0) {
-         console.log(`[RECOVERY] Restored ${invResult.cleaned} abandoned inventory reservations.`);
+        Logger.info('RECOVERY_WORKER', 'inventory.reservations.cleaned', { count: invResult.cleaned })
       }
 
     } catch (e) { 
-      console.error('[RECOVERY ERROR]', (e as Error).message);
+      Logger.error('RECOVERY_WORKER', 'worker.tick.failed', {}, e)
     }
-  }, 60000); // Run every 60s
+  }, 60000);
 }
 
 // ─── Import Routes ────────────────────────────
@@ -208,6 +221,20 @@ app.use(express.static(path.join(process.cwd(), 'public')))
 if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'))
 }
+
+// ─── Request Timing / Observability ──────────
+app.use(`${BASE}`, (req, _res, next) => {
+  const start = Date.now()
+  _res.on('finish', () => {
+    const ms = Date.now() - start
+    if (ms > 2000) {
+      Logger.warn('HTTP', 'request.slow', { method: req.method, path: req.path, statusCode: _res.statusCode, durationMs: ms })
+    } else {
+      Logger.info('HTTP', 'request.completed', { method: req.method, path: req.path, statusCode: _res.statusCode, durationMs: ms })
+    }
+  })
+  next()
+})
 
 // ─── Rate Limiting ────────────────────────────
 applyRateLimits(app, BASE)

@@ -6,6 +6,7 @@
 
 import { Router, Request, Response, NextFunction } from 'express'
 import { PrismaClient } from '@prisma/client'
+import { Logger } from '../../middleware/logger'
 
 declare const prisma: PrismaClient
 
@@ -50,8 +51,18 @@ export class InventoryService {
       }),
     ])
 
+    Logger.info('INVENTORY', 'stock.adjusted', {
+      productId,
+      type,
+      before,
+      after,
+      change,
+      status,
+      referenceId,
+    })
+
     if (status === 'low_stock') {
-      console.warn(`[INVENTORY] Low stock alert: product ${productId}, qty=${after}`)
+      Logger.warn('INVENTORY', 'stock.low', { productId, quantity: after, threshold: inv.lowStockThreshold })
     }
 
     return { productId, before, after, status }
@@ -87,6 +98,7 @@ export class InventoryService {
       }),
     ])
 
+    Logger.info('INVENTORY', 'reservation.soft', { productId, quantity, referenceId, expiresAt: new Date(Date.now() + ttl * 1000).toISOString() })
     return reservation
   }
 
@@ -118,6 +130,7 @@ export class InventoryService {
       }),
     ])
 
+    Logger.info('INVENTORY', 'reservation.hard', { productId, quantity, referenceId })
     return reservation
   }
 
@@ -136,6 +149,7 @@ export class InventoryService {
       ])
     }
 
+    Logger.info('INVENTORY', 'reservation.released', { referenceId, count: reservations.length })
     return { released: reservations.length }
   }
 
@@ -159,6 +173,7 @@ export class InventoryService {
       await this.checkLowStock(r.productId)
     }
 
+    Logger.info('INVENTORY', 'reservation.confirmed', { referenceId, count: reservations.length })
     return { confirmed: reservations.length }
   }
 
