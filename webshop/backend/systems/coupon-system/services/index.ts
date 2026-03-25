@@ -43,14 +43,26 @@ export class CouponService {
   }
 
   async update(id: string, data: Partial<CreateCouponDTO> & { active?: boolean }) {
+    // SAFETY: usageCount is a SYSTEM-CONTROLLED field.
+    // Admin must NEVER directly set or reset it.
     const updateData: any = { ...data }
+    if ('usageCount' in updateData) {
+      console.error(`[COUPON SECURITY] Attempt to directly modify usageCount for coupon ${id} was blocked.`)
+      delete updateData.usageCount
+    }
     if (data.code)      updateData.code = data.code.toUpperCase()
     if (data.expiresAt) updateData.expiresAt = new Date(data.expiresAt)
     return prisma.coupon.update({ where: { id }, data: updateData })
   }
 
-  async delete(id: string) {
-    return prisma.coupon.delete({ where: { id } })
+  /**
+   * Soft deactivate a coupon — preserves history and audit trace.
+   * Hard delete is FORBIDDEN to maintain financial integrity.
+   */
+  async deactivate(id: string) {
+    const coupon = await prisma.coupon.findUnique({ where: { id } })
+    if (!coupon) throw Object.assign(new Error('Coupon not found'), { statusCode: 404 })
+    return prisma.coupon.update({ where: { id }, data: { active: false } })
   }
 
   /**

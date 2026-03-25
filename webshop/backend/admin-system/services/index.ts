@@ -305,6 +305,7 @@ productAdminRouter.post('/products/:id/variants', handle(async (req, res) => {
   const variant = await prisma.productVariant.create({
     data: { productId: req.params.id, name, sku, price, attributes, stock: stock || 0 },
   })
+  await logActivity(req, 'create_variant', 'product_variant', variant.id)
   res.status(201).json({ success: true, data: variant })
 }))
 
@@ -314,6 +315,7 @@ productAdminRouter.post('/products/:id/media', handle(async (req, res) => {
   const media = await prisma.productMedia.create({
     data: { productId: req.params.id, url, type: type || 'image', altText, position: position || 0 },
   })
+  await logActivity(req, 'create_media', 'product_media', media.id)
   res.status(201).json({ success: true, data: media })
 }))
 

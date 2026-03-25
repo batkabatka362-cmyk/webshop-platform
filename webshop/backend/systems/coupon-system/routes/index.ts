@@ -48,14 +48,18 @@ couponAdminRouter.get('/', handle(async (req, res) => {
 }))
 
 couponAdminRouter.put('/:id', handle(async (req, res) => {
-  const dto    = CouponSchema.partial().parse(req.body)
+  // Explicitly block direct usageCount modification at the API gateway
+  const rawBody = req.body
+  if ('usageCount' in rawBody) delete rawBody.usageCount
+  const dto    = CouponSchema.partial().parse(rawBody)
   const coupon = await couponService.update(req.params.id, dto as any)
   res.json({ success: true, data: coupon })
 }))
 
 couponAdminRouter.delete('/:id', handle(async (req, res) => {
-  await couponService.delete(req.params.id)
-  res.status(204).send()
+  // Soft deactivation — coupon history and usage records are NEVER hard-deleted
+  const coupon = await couponService.deactivate(req.params.id)
+  res.json({ success: true, data: { id: coupon.id, active: false, message: 'Coupon deactivated (preserved for audit)' } })
 }))
 
 // ─── Checkout Apply Coupon Route ──────────────
