@@ -252,7 +252,9 @@ export class PaymentPreparationService {
         successfullyReserved.push({ productId: item.productId, quantity: item.quantity })
       } catch (e) {
         console.warn(`[PAYMENT PREP] Reserve warning: ${(e as Error).message}`)
-        await inv.releaseReservation(checkoutId).catch(() => {})
+        await inv.releaseReservation(checkoutId).catch((rollbackErr: any) => {
+          console.error('[CHECKOUT] Inventory rollback failed after reserve error for', checkoutId, rollbackErr?.message)
+        })
         
         throw new CheckoutError(
           `Insufficient stock while reserving ${item.productName}: ${(e as Error).message}`,
@@ -298,7 +300,9 @@ export class PaymentPreparationService {
       })
     } catch (err) {
       // Rollback reservations
-      await inv.releaseReservation(checkoutId).catch(() => {})
+      await inv.releaseReservation(checkoutId).catch((rollbackErr: any) => {
+        console.error('[CHECKOUT] Inventory rollback failed after order creation error for', checkoutId, rollbackErr?.message)
+      })
       throw new CheckoutError(`Order creation failed before payment: ${(err as Error).message}`, 'ORDER_CREATION_FAILED', 500)
     }
 
@@ -327,8 +331,12 @@ export class PaymentPreparationService {
     // Clear the cart securely now that Order is created
     if (session.cartId) {
       // Bypass import cycle via raw DB call since we're in the prep stage
-      await (global as any).prisma.cart.update({ where: { id: session.cartId }, data: { status: 'converted' } }).catch(() => {})
-      await checkoutCartLink.unlockCart(session.cartId).catch(() => {})
+      await (global as any).prisma.cart.update({ where: { id: session.cartId }, data: { status: 'converted' } }).catch((e: any) => {
+        console.error('[CHECKOUT] Failed to mark cart as converted for cartId', session.cartId, e?.message)
+      })
+      await checkoutCartLink.unlockCart(session.cartId).catch((e: any) => {
+        console.error('[CHECKOUT] Failed to unlock cart for cartId', session.cartId, e?.message)
+      })
     }
 
     return {

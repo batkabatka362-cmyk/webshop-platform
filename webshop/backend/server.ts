@@ -149,7 +149,9 @@ export function runSystemRecoveryWorker() {
           const cp = await prisma.checkoutPayment.findFirst({ where: { paymentSessionId: payment.id } });
           if (cp?.checkoutId) {
              const { InventoryService } = await import('./inventory-system/services');
-             await new InventoryService().confirmReservation(cp.checkoutId).catch(() => {});
+             await new InventoryService().confirmReservation(cp.checkoutId).catch((e: any) => {
+               console.error('[RECOVERY.INVENTORY] Failed to confirm reservation for', cp.checkoutId, e?.message)
+             });
           }
         }
       }
