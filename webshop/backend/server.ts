@@ -809,175 +809,160 @@ async function saveAiMemory(context: string, type: string) {
   try { await prisma.aiMemory.create({ data: { context, type } }); } catch(err){}
 }
 
-const AI_TOOLS = {
-  apply_discount: async ({ productId, percent }: { productId: string, percent: number }) => {
-    const p = await prisma.product.findUnique({ where: { id: productId }});
-    if(!p) return `Бараа олдсонгүй: ${productId}`;
-    const newPrice = Math.max(1, p.basePrice * (1 - percent/100));
-    await prisma.product.update({ where: { id: productId }, data: { basePrice: newPrice } });
-    await saveAiLog('ExecutionAgent', 'apply_discount', { productId, oldPrice: p.basePrice, newPrice, percent });
-    return `Бараа [${p.name}] үнэ ${percent}% хямдарч ₮${newPrice} боллоо.`;
-  },
-  auto_process_orders: async () => {
-    const pending = await prisma.order.findMany({ where: { status: 'pending', paymentStatus: 'paid' }});
-    let c = 0;
-    for(const o of pending) { await prisma.order.update({where:{id:o.id}, data:{status:'packaging'}}); c++; }
-    await saveAiLog('ExecutionAgent', 'auto_process_orders', { processed: c });
-    return `${c} цахим захиалга савлагаа руу шилжлээ.`;
-  },
-  scout_trends: async () => {
-    const trends = ["TikTok-д утасны гэр трэнд болж байна", "Amazon-д чихэвч эрэлттэй байна", "Энэ долоо хоногт сурагчдын амралт эхэллээ"];
-    const t = trends[Math.floor(Math.random()*trends.length)];
-    await saveAiMemory(`CMO судалгаа: ${t}`, 'learning');
-    return t;
-  },
-  inject_ui_component: async ({ location, html }: { location: string, html: string }) => {
-    const fixedCost = 5000;
-    const capital = await getAiCapital();
-    if(capital < fixedCost) return `AI CTO: Хөрөнгө хүрэлцэхгүй байна. (Үлдэгдэл: ₮${capital}, Шаардлагатай: ₮${fixedCost})`;
-    
-    await spendAiCapital(fixedCost);
-    // Deactivate previous component at location
-    await prisma.aiComponent.updateMany({ where: { location }, data: { active: false } });
-    const comp = await prisma.aiComponent.create({ data: { location, html, active: true } });
-    
-    await prisma.aiExperiment.create({
-      data: { title: `UI Injection: ${location}`, hypothesis: "Шинэ HTML/CSS нь борлуулалтыг нэмэгдүүлнэ.", type: "ui_change", targetId: comp.id, metrics: { sales_before: 0 }, cost: fixedCost }
-    });
-    
-    await saveAiLog('CTO', 'inject_ui_component', { compId: comp.id, location, cost: fixedCost });
-    return `AI CTO: Шинэ ${location} UI амжилттай сайт дээр байрлалаа. Үнэ: ₮${fixedCost}`;
-  },
-  invent_product: async ({ name, description, basePrice, seoTags }: { name: string, description: string, basePrice: number, seoTags: string }) => {
-    const cost = 20000;
-    const capital = await getAiCapital();
-    if(capital < cost) return `AI Sourcing: Хөрөнгө хүрэлцэхгүй байна. (Үлдэгдэл: ₮${capital})`;
-    
-    await spendAiCapital(cost);
-    const sku = 'AI-' + Math.random().toString(36).substring(2, 8).toUpperCase();
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Math.random().toString(36).substring(2, 6);
-    
-    const prod = await prisma.product.create({
-      data: { name, slug, sku, description, basePrice, seoTags, isAiGenerated: true }
-    });
-    
-    await saveAiLog('Sourcing', 'invent_product', { productId: prod.id, name, basePrice });
-    return `AI Sourcing: Шинэ бараа амжилттай дэлгүүрт нэмэгдлээ: [${name}] үнэ: ₮${basePrice}`;
-  },
-  dynamic_pricing_adjustment: async ({ productId, direction, percent }: { productId: string, direction: 'increase'|'decrease', percent: number }) => {
-    const p = await prisma.product.findUnique({ where: { id: productId }});
-    if(!p) return 'Бараа олдсонгүй';
-    const oldPrice = p.basePrice;
-    let newPrice = oldPrice;
-    if (direction === 'increase') newPrice = Math.floor(oldPrice * (1 + percent/100));
-    else if (direction === 'decrease') newPrice = Math.floor(oldPrice * (1 - percent/100));
-    
-    await prisma.product.update({ where: { id: productId }, data: { basePrice: newPrice } });
-    await saveAiLog('Quant', 'dynamic_pricing', { productId, direction, percent, newPrice });
-    return `AI Quant: [${p.name}] үнэ ${percent}% ${direction==='increase'?'өслөө':'буурлаа'} -> ₮${newPrice}`;
-  },
-  audit_and_heal_system: async () => {
-    // V34 AI Self-Healing
-    let fixedInventory = 0;
-    let cancelledOrders = 0;
-    
-    // 1. Fix negative inventory
-    const badStock = await prisma.inventory.findMany({ where: { quantity: { lt: 0 } } });
-    for (const inv of badStock) {
-      await prisma.inventory.update({ where: { id: inv.id }, data: { quantity: 0 } });
-      fixedInventory++;
-    }
-    
-    // 2. Cancel stranded orders (> 48h pending payment)
-    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
-    const strandedOrders = await prisma.order.findMany({
-      where: { status: 'pending', paymentStatus: 'pending', createdAt: { lt: twoDaysAgo } }
-    });
-    for (const ord of strandedOrders) {
-      await prisma.order.update({ where: { id: ord.id }, data: { status: 'cancelled' } });
-      cancelledOrders++;
-    }
-    
-    // 3. V40 AI Fraud Detection
-    const pendingToScan = await prisma.order.findMany({ where: { fraudScore: 0, status: 'pending' }, include: { items: true }, take: 10 });
-    let fraudCaught = 0;
-    for (const o of pendingToScan) {
-      let score = 0; let reason = [];
-      const qty = o.items.reduce((s: number, i: any) => s + i.quantity, 0);
-      if (qty > 10) { score += 40; reason.push("Их хэмжээний сагс"); }
-      if (o.grandTotal > 5000000) { score += 50; reason.push("Хэт өндөр дүн"); }
-      if (score > 80) fraudCaught++;
-      await prisma.order.update({ where: { id: o.id }, data: { fraudScore: score || 1, fraudReason: reason.length ? reason.join(', ') : 'OK' } });
-    }
 
-    const msg = `AI Хянагч: ${fixedInventory} нөөц тэгшилж, ${cancelledOrders} гацсан захиалга цуцалж, ${fraudCaught} луйвар илрүүллээ.`;
-    await saveAiLog('SystemAudit', 'audit_and_heal', { fixedInventory, cancelledOrders, fraudCaught });
-    return msg;
-  }
+// ═══════════════════════════════════════════════════════════
+// AI ADVISORY LAYER (READ-ONLY — CONTRACT ENFORCED)
+//
+// CONTRACT RULES:
+// 1. AI MUST NOT write to any core DB table directly.
+// 2. AI MUST NOT change order/payment/inventory/shipping state.
+// 3. AI output is ALWAYS a structured advisory suggestion.
+// 4. Suggestions are queued for human/admin review.
+// 5. Execution ONLY happens via explicit admin approval endpoint.
+// ═══════════════════════════════════════════════════════════
+
+// AI Advisory Output Structure — STRICT CONTRACT
+interface AiSuggestion {
+  type:       'analysis' | 'recommendation' | 'warning'
+  target:     'product' | 'order' | 'system' | 'pricing'
+  action:     string         // human-readable action name
+  args:       Record<string, any>  // validated args for admin to review
+  message:    string
+  reason:     string
+  confidence: 'low' | 'medium' | 'high'
+}
+
+// READ-ONLY AI Advisory Tools — these OBSERVE data but NEVER mutate it
+const AI_ADVISORY_TOOLS = {
+  suggest_discount: async ({ productId, percent }: { productId: string, percent: number }): Promise<AiSuggestion> => {
+    const p = await prisma.product.findUnique({ where: { id: productId }, select: { id: true, name: true, basePrice: true } });
+    if (!p) return { type: 'warning', target: 'product', action: 'suggest_discount', args: {}, message: `Product not found: ${productId}`, reason: 'Invalid productId', confidence: 'low' };
+    const newPrice = Math.max(1, Math.floor(p.basePrice * (1 - percent / 100)));
+    return {
+      type: 'recommendation', target: 'product', action: 'apply_discount',
+      args: { productId, percent, suggestedPrice: newPrice },
+      message: `Suggest ${percent}% discount on "${p.name}" (₮${p.basePrice} → ₮${newPrice})`,
+      reason: 'AI analysis of current inventory velocity and competitive pricing',
+      confidence: 'medium'
+    };
+  },
+  suggest_process_orders: async (): Promise<AiSuggestion> => {
+    const count = await prisma.order.count({ where: { status: 'paid', paymentStatus: 'paid' } });
+    return {
+      type: 'recommendation', target: 'order', action: 'advance_paid_orders_to_processing',
+      args: { eligibleCount: count },
+      message: `${count} paid orders are ready to advance to PROCESSING`,
+      reason: 'Orders confirmed paid and awaiting fulfillment preparation',
+      confidence: 'high'
+    };
+  },
+  suggest_dynamic_pricing: async ({ productId, direction, percent }: { productId: string, direction: 'increase'|'decrease', percent: number }): Promise<AiSuggestion> => {
+    const p = await prisma.product.findUnique({ where: { id: productId }, select: { id: true, name: true, basePrice: true } });
+    if (!p) return { type: 'warning', target: 'product', action: 'suggest_dynamic_pricing', args: {}, message: 'Product not found', reason: 'Invalid productId', confidence: 'low' };
+    const newPrice = direction === 'increase'
+      ? Math.floor(p.basePrice * (1 + percent / 100))
+      : Math.floor(p.basePrice * (1 - percent / 100));
+    return {
+      type: 'recommendation', target: 'pricing', action: 'dynamic_pricing_adjustment',
+      args: { productId, direction, percent, suggestedPrice: newPrice },
+      message: `Suggest ${direction === 'increase' ? '↑' : '↓'} ${percent}% on "${p.name}" (₮${p.basePrice} → ₮${newPrice})`,
+      reason: 'AI demand analysis and competitor price signal',
+      confidence: 'medium'
+    };
+  },
+  audit_inventory: async (): Promise<AiSuggestion> => {
+    const badStock = await prisma.inventory.count({ where: { quantity: { lt: 0 } } });
+    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const strandedCount = await prisma.order.count({ where: { status: 'pending', paymentStatus: 'pending', createdAt: { lt: twoDaysAgo } } });
+    return {
+      type: badStock > 0 || strandedCount > 0 ? 'warning' : 'analysis',
+      target: 'system', action: 'system_audit_report',
+      args: { negativeStockCount: badStock, strandedOrderCount: strandedCount },
+      message: `Audit: ${badStock} products with negative stock. ${strandedCount} orders stranded >48h pending payment.`,
+      reason: 'Periodic data integrity scan — admin review required before any corrections',
+      confidence: 'high'
+    };
+  },
+  scout_trends: async (): Promise<AiSuggestion> => {
+    // Read-only: returns a market observation as a suggestion, never saves autonomously
+    const trends = ["TikTok-д утасны гэр трэнд болж байна", "Amazon-д чихэвч эрэлттэй байна", "Энэ долоо хоногт сурагчдын амралт эхэллээ"];
+    const t = trends[Math.floor(Math.random() * trends.length)];
+    return {
+      type: 'analysis', target: 'system', action: 'market_trend_observation',
+      args: { trend: t },
+      message: `Market signal detected: ${t}`,
+      reason: 'External trend scout — for admin marketing consideration only',
+      confidence: 'low'
+    };
+  },
 };
+
+// AI outputs are queued as SUGGESTIONS, never executed
+async function queueAiSuggestion(suggestion: AiSuggestion) {
+  Logger.info('AI_ADVISORY', 'suggestion.queued', {
+    type:       suggestion.type,
+    action:     suggestion.action,
+    target:     suggestion.target,
+    confidence: suggestion.confidence,
+  });
+  await prisma.aiAgentLog.create({
+    data: {
+      agent:   'AiAdvisory',
+      action:  'pending_suggestion',
+      details: { ...suggestion, approvedAt: null, approvedBy: null },
+    }
+  });
+}
 
 async function runAiWatcher() {
   try {
-    const mem = await prisma.aiMemory.findMany({ take: 3, orderBy: { createdAt: 'desc' } });
-    const exps = await prisma.aiExperiment.findMany({ where: { status: 'running' } });
     const cap = await getAiCapital();
-    const pendingOrders = await prisma.order.count({ where: { status: 'pending', paymentStatus: 'paid' }});
+    const pendingPaidOrders = await prisma.order.count({ where: { status: 'paid', paymentStatus: 'paid' } });
+    const mem = await prisma.aiMemory.findMany({ take: 3, orderBy: { createdAt: 'desc' } });
     
-    const observation = `Санхүү (AI Capital): ₮${cap}. Идэвхтэй туршилтууд: ${exps.length}. Хүлээгдэж буй захиалга: ${pendingOrders}.`;
-    
-    const prompt = `Чи бол Вэб Дэлгүүрийн Удирдах Зөвлөл (Board of Directors - Autonomous Startup). 
-Бүрэлдэхүүн:
-1. CTO (Код бичигч, UI үүсгэгч)
-2. CMO (Маркетер, Трэнд судлаач)
-3. CFO (Санхүүч, Зардал хянагч)
-4. Quant (Data Scientist - Үнийн алгоритм)
-5. Sourcing (Бараа зохион бүтээгч)
+    const observation = `Capital: ₮${cap}. Paid orders awaiting processing: ${pendingPaidOrders}.`;
+    const prompt = `You are a READ-ONLY ecommerce analytics AI. You OBSERVE data. You do NOT execute actions.
 
-Танай баг доорх мэдээлэл дээр хуралдаж хамгийн оновчтой 1 шийдвэр гаргах ёстой.
-Санах Ой: ${mem.map(m=>m.context).join(' | ')}
-Одоогийн Төлөв: ${observation}
+System Observation: ${observation}
+Memory Context: ${mem.map(m => m.context).join(' | ')}
 
-Ашиглах боломжтой багажууд (Tools):
-- 'scout_trends' (CMO-ийн гадаад трэнд судлах үйлдэл)
-- 'audit_and_heal_system' (AI Хянагчийн үйлдэл: Буруу/Хасах нөөц болон 48 цаг гацсан захиалгыг автоматаар засаж цэвэрлэх V34 Self-Heal)
-- 'inject_ui_component' (CTO-ийн HTML/CSS үүсгэх үйлдэл. Зардал: 5000₮. args: {"location": "home_banner", "html": "<div style='background:red;color:white;padding:10px;text-align:center;'>Трэнд бараа 10% хямдарлаа!</div>"})
-- 'invent_product' (Sourcing-ийн шинэ бараа зохиох үйлдэл. Зардал 20000₮. args: {"name": "Барааны нэр", "description": "Тайлбар", "basePrice": 150000, "seoTags": "tag1, tag2"})
-- 'dynamic_pricing_adjustment' (Quant-ийн үнэ өсгөх/бууруулах үйлдэл. args: {"productId": "uuid эсвэл id", "direction": "increase" эсвэл "decrease", "percent": 5})
-- 'auto_process_orders' (Хүлээгдэж буй захиалга савлах хэлтэс рүү шилжүүлэх)
-- 'none' (Хийх зүйл алга)
+Return ONLY a JSON array of suggestions in this format:
+[{
+  "tool": "suggest_discount|suggest_process_orders|suggest_dynamic_pricing|audit_inventory|scout_trends",
+  "args": {},
+  "confidence": "low|medium|high",
+  "reason": "why this suggestion is made"
+}]
 
-ЗӨВХӨН ДООРХ JSON ФОРМАТААР хариулна, өөр үг бүү бич:
-{
-  "debate": "CTO, CMO, CFO, Quant, Sourcing нарын богино харилцан яриа. Цаашид хэд хэдэн алхамт үйлдэл (Task Chain) хийхийг зөвшөөрнө.",
-  "tools": [
-    {"tool": "сонгосон багажны нэр эсвэл none", "args": {}}
-  ]
-}`;
+RULES:
+- You are READ-ONLY. Never suggest irreversible actions with high risk.
+- Confidence MUST reflect actual certainty.
+- Return at most 2 suggestions per cycle.`;
 
-    const res = await aiCall(prompt, "Чи зөвхөн JSON буцаадаг AI Swarm.");
-    const jsonMatch = res.match(/\{[\s\S]*\}/);
-    if(jsonMatch) {
-      try {
-        // Sanitize trailing commas which cause parse errors
-        const cleanJsonStr = jsonMatch[0].replace(/,\s*([}\]])/g, '$1');
-        const decision = JSON.parse(cleanJsonStr);
-        await saveAiMemory(`Хурлын шийдвэр: ${decision.debate || 'Мэтгэлцээн'} -> ${decision.tools?.length || 0} алхамт үйлдэл гүйцэтгэнэ.`, 'observation');
-        
-        // V32: Multi-Agent Task Chaining (Sequential Execution)
-        if (decision.tools && Array.isArray(decision.tools)) {
-          for (const step of decision.tools) {
-            if(step.tool && step.tool !== 'none' && AI_TOOLS[step.tool as keyof typeof AI_TOOLS]) {
-              const toolRes = await (AI_TOOLS[step.tool as keyof typeof AI_TOOLS] as any)(step.args || {});
-              await saveAiMemory(`Алхам [${step.tool}] Үр дүн: ${toolRes}`, 'action');
-            }
-          }
+    const res = await aiCall(prompt, 'You are a read-only advisory AI. Output JSON suggestions only.');
+    const jsonMatch = res.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const cleanJson = jsonMatch[0].replace(/,\s*([}\]])/g, '$1');
+      const suggestions = JSON.parse(cleanJson);
+      
+      // CONTRACT ENFORCEMENT: Each tool must exist in advisory-only whitelist
+      for (const s of (Array.isArray(suggestions) ? suggestions : [])) {
+        const toolFn = AI_ADVISORY_TOOLS[s.tool as keyof typeof AI_ADVISORY_TOOLS];
+        if (!toolFn) {
+          Logger.warn('AI_ADVISORY', 'suggestion.unknown_tool.blocked', { tool: s.tool });
+          continue;
         }
-      } catch (parseErr) {
-        console.error('[AI Swarm JSON Parse Error]', parseErr);
-        await saveAiMemory(`Хурлын шийдвэр гаргах үед алдаа гарлаа: JSON формат буруу байна.`, 'error');
+        
+        // Call read-only advisory function — NO EXECUTION, just observation
+        const suggestion = await toolFn(s.args || {} as any);
+        
+        // Queue suggestion for human review — NEVER execute automatically
+        await queueAiSuggestion(suggestion);
       }
     }
-  } catch(e) { console.error('[AI Swarm Watcher] Алдаа:', e); }
+  } catch(e) {
+    Logger.error('AI_ADVISORY', 'watcher.error', {}, e);
+  }
 }
 
 // ── GET /ai/agents/state
