@@ -269,7 +269,7 @@ RULES:
 }
 
 // ── GET /ai/agents/state
-aiRouter.get('/ai/agents/state`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const logs = await prisma.aiAgentLog.findMany({ take: 10, orderBy: { createdAt: 'desc' } });
     const mem = await prisma.aiMemory.findMany({ take: 10, orderBy: { createdAt: 'desc' } });
@@ -280,7 +280,7 @@ aiRouter.get('/ai/agents/state`', async (_req, res) => {
 });
 
 // ── POST /ai/agents/toggle
-aiRouter.post('/ai/agents/toggle`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   const { on } = req.body;
   if(on && !watcherActive) {
     watcherInterval = setInterval(runAiWatcher, 60000); // Every 60 seconds
@@ -295,7 +295,7 @@ aiRouter.post('/ai/agents/toggle`', async (req, res) => {
 });
 
 // ── V40: AI Live Brain Feed (Storefront Ticker)
-aiRouter.get('/storefront/ai/live-feed`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const logs = await prisma.aiAgentLog.findMany({ take: 5, orderBy: { createdAt: 'desc' } });
     res.json({ success: true, data: logs });
@@ -303,7 +303,7 @@ aiRouter.get('/storefront/ai/live-feed`', async (_req, res) => {
 });
 
 // ── V40: Admin Manual Fraud Scan API
-aiRouter.post('/admin/ai/fraud-scan`', async (_req, res) => {
+aiRouter.post('/', async (_req, res) => {
   try {
     const pendingToScan = await prisma.order.findMany({ where: { status: 'pending' }, include: { items: true }, take: 50 });
     let fraudCaught = 0;
@@ -321,13 +321,13 @@ aiRouter.post('/admin/ai/fraud-scan`', async (_req, res) => {
 });
 
 // Supplier CRUD — persisted to Database
-aiRouter.get('/suppliers`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const suppliers = await prisma.supplier.findMany({ orderBy: { createdAt: 'desc' } });
     res.json({ success: true, data: suppliers });
   } catch(e) { res.status(500).json({ success: false }); }
 });
-aiRouter.post('/suppliers`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { name, phone, email, notes } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'Нэр шаардлагатай' });
@@ -335,14 +335,14 @@ aiRouter.post('/suppliers`', async (req, res) => {
     res.json({ success: true, data: sup });
   } catch(e) { res.status(500).json({ success: false }); }
 });
-aiRouter.patch('/suppliers/:id`', async (req, res) => {
+aiRouter.patch('/', async (req, res) => {
   try {
     const { name, phone, email, status, notes } = req.body;
     const sup = await prisma.supplier.update({ where: { id: req.params.id }, data: { name: name || undefined, phone: phone || undefined, email: email || undefined, status: status || undefined, notes: notes || undefined } });
     res.json({ success: true, data: sup });
   } catch(e) { res.status(500).json({ success: false }); }
 });
-aiRouter.delete('/suppliers/:id`', async (req, res) => {
+aiRouter.delete('/', async (req, res) => {
   try {
     await prisma.supplier.delete({ where: { id: req.params.id } });
     res.json({ success: true });
@@ -352,7 +352,7 @@ aiRouter.delete('/suppliers/:id`', async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 // V23: THE NEGOTIATOR CHATBOT (AI CUSTOMER RETENTION)
 // ═══════════════════════════════════════════════════════════
-aiRouter.post('/storefront/ai/chat`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { message, chatHistory, context } = req.body;
     
@@ -426,7 +426,7 @@ ${contextualDocs}`;
 });
 
 // ── GET /ai/conglomerate/status — V23/V24 Dashboard Data with ROI
-aiRouter.get('/ai/conglomerate/status`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const aiProducts = await prisma.product.findMany({ where: { isAiGenerated: true }, orderBy: { createdAt: 'desc' } });
     const aiPromos = await prisma.chatPromoCode.findMany({ orderBy: { createdAt: 'desc' } });
@@ -453,7 +453,7 @@ aiRouter.get('/ai/conglomerate/status`', async (_req, res) => {
 });
 
 // ── GET /storefront/ai/components — V30 AI Server-Driven UI
-aiRouter.get('/storefront/ai/components`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const comps = await prisma.aiComponent.findMany({ where: { active: true } });
     res.json({ success: true, data: comps });
@@ -461,14 +461,14 @@ aiRouter.get('/storefront/ai/components`', async (_req, res) => {
 });
 
 // ── V29 KNOWLEDGE BASE ADMIN ENDPOINTS ──
-aiRouter.get('/admin/ai/knowledge`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const docs = await prisma.aiKnowledgeBase.findMany({ orderBy: { createdAt: 'desc' } });
     res.json({ success: true, data: docs });
   } catch(e) { res.status(500).json({ success: false }); }
 });
 
-aiRouter.post('/admin/ai/knowledge`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { title, content, isActive } = req.body;
     if (!title || !content) return res.status(400).json({ success: false });
@@ -477,7 +477,7 @@ aiRouter.post('/admin/ai/knowledge`', async (req, res) => {
   } catch(e) { res.status(500).json({ success: false }); }
 });
 
-aiRouter.delete('/admin/ai/knowledge/:id`', async (req, res) => {
+aiRouter.delete('/', async (req, res) => {
   try {
     await prisma.aiKnowledgeBase.delete({ where: { id: req.params.id } });
     res.json({ success: true });
@@ -485,7 +485,7 @@ aiRouter.delete('/admin/ai/knowledge/:id`', async (req, res) => {
 });
 
 // ── V41 HYPER-COGNITIVE AI: PERSONA & RLHF ENDPOINTS ──
-aiRouter.get('/admin/ai/persona`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const doc = await prisma.aiKnowledgeBase.findFirst({ where: { title: 'SYSTEM_PERSONA' } });
     if(doc && doc.content) {
@@ -496,7 +496,7 @@ aiRouter.get('/admin/ai/persona`', async (_req, res) => {
   } catch(e) { res.status(500).json({ success: false }); }
 });
 
-aiRouter.post('/admin/ai/persona`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { persona, tone, objective } = req.body;
     const content = JSON.stringify({ persona, tone, objective });
@@ -510,7 +510,7 @@ aiRouter.post('/admin/ai/persona`', async (req, res) => {
   } catch(e) { res.status(500).json({ success: false }); }
 });
 
-aiRouter.post('/admin/ai/scrape-url`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { url } = req.body;
     if (!url) return res.status(400).json({ success: false, message: 'URL хоосон байна' });
@@ -536,7 +536,7 @@ aiRouter.post('/admin/ai/scrape-url`', async (req, res) => {
   }
 });
 
-aiRouter.post('/admin/ai/memory-correction`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { correction } = req.body;
     if (!correction) return res.status(400).json({ success: false });
@@ -547,7 +547,7 @@ aiRouter.post('/admin/ai/memory-correction`', async (req, res) => {
 
 
 // ── POST /ai/agents/command — V24 Direct Manual Swarm Override
-aiRouter.post('/ai/agents/command`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { prompt } = req.body;
     if(!prompt) return res.status(400).json({ success: false, message: 'Хоосон хүсэлт' });
@@ -583,7 +583,7 @@ aiRouter.post('/ai/agents/command`', async (req, res) => {
 });
 
 // ── GET /ai/config — Current AI config
-aiRouter.get('/ai/config`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   res.json({ success: true, data: {
     provider: AI_CONFIG.provider,
     model: AI_CONFIG.provider === 'ollama' ? AI_CONFIG.ollamaModel : AI_CONFIG.openaiModel,
@@ -595,7 +595,7 @@ aiRouter.get('/ai/config`', async (_req, res) => {
 });
 
 // ── PATCH /ai/config — Change AI model at runtime
-aiRouter.patch('/ai/config`', async (req, res) => {
+aiRouter.patch('/', async (req, res) => {
   try {
     const { provider, model, ollamaUrl, temperature, maxTokens, openaiKey } = req.body;
     if (provider) AI_CONFIG.provider = provider;
@@ -615,21 +615,21 @@ aiRouter.patch('/ai/config`', async (req, res) => {
 
 // ─── V42 HEAVY OPS DASHBOARD ENDPOINTS ─────────
 
-aiRouter.get('/admin/ops/metrics`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const metrics = await prisma.systemMetric.findMany({ orderBy: { createdAt: 'desc' }, take: 20 });
     res.json({ success: true, data: metrics });
   } catch(e) { res.status(500).json({ success: false }); }
 });
 
-aiRouter.get('/admin/ops/jobs`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const jobs = await prisma.backgroundJob.findMany({ orderBy: { createdAt: 'desc' }, take: 10 });
     res.json({ success: true, data: jobs });
   } catch(e) { res.status(500).json({ success: false }); }
 });
 
-aiRouter.post('/admin/ops/test-job`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const job = await prisma.backgroundJob.create({ 
       data: { type: 'email_blast', payload: { count: 10000, template: 'black_friday' } } 
@@ -638,14 +638,14 @@ aiRouter.post('/admin/ops/test-job`', async (req, res) => {
   } catch(e) { res.status(500).json({ success: false }); }
 });
 
-aiRouter.get('/admin/ops/api-keys`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const keys = await prisma.apiKey.findMany({ orderBy: { createdAt: 'desc' } });
     res.json({ success: true, data: keys });
   } catch(e) { res.status(500).json({ success: false }); }
 });
 
-aiRouter.post('/admin/ops/api-keys`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { name } = req.body;
     if(!name) return res.status(400).json({ success: false });
@@ -655,7 +655,7 @@ aiRouter.post('/admin/ops/api-keys`', async (req, res) => {
   } catch(e) { res.status(500).json({ success: false }); }
 });
 
-aiRouter.delete('/admin/ops/api-keys/:id`', async (req, res) => {
+aiRouter.delete('/', async (req, res) => {
   try {
     await prisma.apiKey.delete({ where: { id: req.params.id }});
     res.json({ success: true });
@@ -663,7 +663,7 @@ aiRouter.delete('/admin/ops/api-keys/:id`', async (req, res) => {
 });
 
 // ── GET /admin/settings — Load store settings
-aiRouter.get('/admin/settings`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const setting = await prisma.systemEvent.findFirst({ where: { eventType: 'STORE_SETTINGS' }, orderBy: { createdAt: 'desc' } });
     const defaults = { storeName: 'WEBSHOP', aiEnabled: true };
@@ -673,7 +673,7 @@ aiRouter.get('/admin/settings`', async (_req, res) => {
 });
 
 // ── PATCH /admin/settings — Save store settings
-aiRouter.patch('/admin/settings`', async (req, res) => {
+aiRouter.patch('/', async (req, res) => {
   try {
     const { storeName, aiEnabled } = req.body;
     await prisma.systemEvent.create({ data: { eventType: 'STORE_SETTINGS', sourceSystem: 'admin', payload: { storeName: storeName || 'WEBSHOP', aiEnabled: aiEnabled !== false, savedAt: new Date().toISOString() } } });
@@ -683,7 +683,7 @@ aiRouter.patch('/admin/settings`', async (req, res) => {
 });
 
 // ── POST /ai/automation/orders — Order processing automation
-aiRouter.post('/ai/automation/orders`', async (_req, res) => {
+aiRouter.post('/', async (_req, res) => {
   try {
     const pendingOrders = await prisma.order.findMany({ where: { status: 'pending' }, include: { items: true }, take: 20 });
     const totalOrders = await prisma.order.count();
@@ -706,7 +706,7 @@ aiRouter.post('/ai/automation/orders`', async (_req, res) => {
 });
 
 // ── POST /ai/automation/suppliers — V33 Predictive Supplier Reorder automation
-aiRouter.post('/ai/automation/suppliers`', async (_req, res) => {
+aiRouter.post('/', async (_req, res) => {
   try {
     const products = await prisma.product.findMany({ where: { deletedAt: null }, include: { category: true, inventory: true }, take: 50 });
     let suppliers: any[] = [];
@@ -730,7 +730,7 @@ aiRouter.post('/ai/automation/suppliers`', async (_req, res) => {
 });
 
 // ── GET /admin/dashboard/supply-orders — V33 Admin UI
-aiRouter.get('/admin/dashboard/supply-orders`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const orders = await prisma.supplyOrder.findMany({ include: { product: { include: { inventory: true } } }, orderBy: { createdAt: 'desc' } });
     res.json({ success: true, data: orders });
@@ -738,7 +738,7 @@ aiRouter.get('/admin/dashboard/supply-orders`', async (_req, res) => {
 });
 
 // ── POST /admin/dashboard/supply-orders/:id/approve — V33 Atomic Inventory Increment
-aiRouter.post('/admin/dashboard/supply-orders/:id/approve`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const order = await prisma.supplyOrder.findUnique({ where: { id: req.params.id } });
     if (!order || order.status !== 'DRAFT') return res.status(400).json({ success: false, message: 'Invalid order' });
@@ -758,7 +758,7 @@ aiRouter.post('/admin/dashboard/supply-orders/:id/approve`', async (req, res) =>
 });
 
 // ── POST /admin/ai/fraud-scan — V35 Order Fraud Detection AI
-aiRouter.post('/admin/ai/fraud-scan`', async (_req, res) => {
+aiRouter.post('/', async (_req, res) => {
   try {
     const orders = await prisma.order.findMany({ where: { fraudScore: 0, status: 'pending' }, take: 20 });
     let scanCount = 0, flaggedCount = 0;
@@ -780,7 +780,7 @@ aiRouter.post('/admin/ai/fraud-scan`', async (_req, res) => {
 });
 
 // ── POST /admin/ai/seo-optimize — V37 AI Catalog SEO Optimizer
-aiRouter.post('/admin/ai/seo-optimize`', async (_req, res) => {
+aiRouter.post('/', async (_req, res) => {
   try {
     const unoptimized = await prisma.product.findMany({
       where: { OR: [ { seoTags: null }, { seoTags: '' }, { description: null } ] },
@@ -816,7 +816,7 @@ aiRouter.post('/admin/ai/seo-optimize`', async (_req, res) => {
 });
 
 // ── POST /admin/ai/price-optimize — V38 AI Dynamic Pricing Engine
-aiRouter.post('/admin/ai/price-optimize`', async (_req, res) => {
+aiRouter.post('/', async (_req, res) => {
   try {
     const products = await prisma.product.findMany({
       where: { status: 'active', deletedAt: null },
@@ -869,7 +869,7 @@ aiRouter.post('/admin/ai/price-optimize`', async (_req, res) => {
 });
 
 // ── GET /abandoned-carts — V36 AI Abandoned Cart Recovery
-aiRouter.get('/abandoned-carts`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const carts = await prisma.cart.findMany({
@@ -888,7 +888,7 @@ aiRouter.get('/abandoned-carts`', async (_req, res) => {
 });
 
 // ── POST /admin/ai/recover-cart/:cartId — V36 AI Smart Retargeting
-aiRouter.post('/admin/ai/recover-cart/:cartId`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const cart = await prisma.cart.findUnique({ where: { id: req.params.cartId }, include: { items: true } });
     if (!cart || !cart.items.length) return res.status(404).json({ success: false });
@@ -908,7 +908,7 @@ aiRouter.post('/admin/ai/recover-cart/:cartId`', async (req, res) => {
 });
 
 // ── POST /ai/automation/marketing — AI-generated marketing campaigns
-aiRouter.post('/ai/automation/marketing`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { target, goal } = req.body;
     const customers = await prisma.customer.findMany({ take: 100 });
@@ -923,7 +923,7 @@ aiRouter.post('/ai/automation/marketing`', async (req, res) => {
 });
 
 // ── GET /admin/ai/omnichannel — V31 Omnichannel List
-aiRouter.get('/admin/ai/omnichannel`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const campaigns = await prisma.aiMarketingCampaign.findMany({ orderBy: { createdAt: 'desc' } });
     res.json({ success: true, data: campaigns });
@@ -931,7 +931,7 @@ aiRouter.get('/admin/ai/omnichannel`', async (_req, res) => {
 });
 
 // ── POST /admin/ai/omnichannel/generate — V31 Omnichannel Generator
-aiRouter.post('/admin/ai/omnichannel/generate`', async (_req, res) => {
+aiRouter.post('/', async (_req, res) => {
   try {
     const topProducts = await prisma.product.findMany({ where: { deletedAt: null }, orderBy: { basePrice: 'desc' }, take: 3 });
     const productNames = topProducts.map(p => p.name).join(', ');
@@ -953,7 +953,7 @@ aiRouter.post('/admin/ai/omnichannel/generate`', async (_req, res) => {
 });
 
 // ── POST /ai/automation/customers — Customer segmentation & churn prediction
-aiRouter.post('/ai/automation/customers`', async (_req, res) => {
+aiRouter.post('/', async (_req, res) => {
   try {
     const customers = await prisma.customer.findMany({ take: 100 });
     const orders = await prisma.order.findMany({ take: 200 });
@@ -968,7 +968,7 @@ aiRouter.post('/ai/automation/customers`', async (_req, res) => {
 });
 
 // ── POST /ai/automation/pricing — AI pricing optimization
-aiRouter.post('/ai/automation/pricing`', async (_req, res) => {
+aiRouter.post('/', async (_req, res) => {
   try {
     const products = await prisma.product.findMany({ where: { deletedAt: null }, include: { category: true }, take: 30 });
     const orders = await prisma.order.findMany({ include: { items: true }, take: 100 });
@@ -984,7 +984,7 @@ aiRouter.post('/ai/automation/pricing`', async (_req, res) => {
 });
 
 // ── GET /ai/automation/status — AI system dashboard
-aiRouter.get('/ai/automation/status`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const pendingOrders = await prisma.order.count({ where: { status: 'pending' } });
     const totalCustomers = await prisma.customer.count();
@@ -1008,7 +1008,7 @@ aiRouter.get('/ai/automation/status`', async (_req, res) => {
 });
 
 // Enhanced AI Chat (uses configurable model)
-aiRouter.post('/storefront/ai/chat`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { message } = req.body;
     if (!message) return res.json({ success: false, text: 'Та асуултаа оруулна уу?' });
@@ -1031,7 +1031,7 @@ aiRouter.post('/storefront/ai/chat`', async (req, res) => {
 });
 
 // Product catalog (basic CRUD)
-aiRouter.get('/products`', async (req, res) => {
+aiRouter.get('/', async (req, res) => {
   try {
     const page = parseInt(req.query.page as string) || 1
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 100)
@@ -1078,7 +1078,7 @@ aiRouter.get('/products`', async (req, res) => {
   }
 })
 
-aiRouter.get('/products/:idOrSlug`', async (req, res) => {
+aiRouter.get('/', async (req, res) => {
   try {
     const { idOrSlug } = req.params
     const product = await prisma.product.findFirst({
@@ -1101,7 +1101,7 @@ aiRouter.get('/products/:idOrSlug`', async (req, res) => {
 })
 
 // Fetch Active AI Components for Dynamic UI
-aiRouter.get('/storefront/ai-ui`', async (req, res) => {
+aiRouter.get('/', async (req, res) => {
   try {
     const comps = await prisma.aiComponent.findMany({ where: { active: true } });
     res.json({ success: true, data: comps });
@@ -1111,7 +1111,7 @@ aiRouter.get('/storefront/ai-ui`', async (req, res) => {
 })
 
 // AI Product Generator (enhanced with real AI)
-aiRouter.post('/ai/generate-product`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { name } = req.body;
     const prompt = `Бараа нэр: "${name}"
@@ -1136,7 +1136,7 @@ JSON хэлбэрээр хариулна уу.`;
 })
 
 // Admin Create Product
-aiRouter.post('/products`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { name, slug, description, basePrice, costPrice, salePrice, categoryId, images } = req.body;
     const prod = await prisma.product.create({
@@ -1154,7 +1154,7 @@ aiRouter.post('/products`', async (req, res) => {
 })
 
 // Admin Delete Product
-aiRouter.delete('/products/:id`', async (req, res) => {
+aiRouter.delete('/', async (req, res) => {
   try {
     await prisma.product.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
     res.json({ success: true });
@@ -1162,7 +1162,7 @@ aiRouter.delete('/products/:id`', async (req, res) => {
 })
 
 // Admin Update Product
-aiRouter.patch('/products/:id`', async (req, res) => {
+aiRouter.patch('/', async (req, res) => {
   try {
     const { name, slug, description, basePrice, costPrice, salePrice, categoryId, images } = req.body;
     await prisma.product.update({
@@ -1180,7 +1180,7 @@ aiRouter.patch('/products/:id`', async (req, res) => {
 })
 
 // V7 Bulk Delete Products
-aiRouter.post('/products/bulk-delete`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { ids } = req.body;
     if(!ids || !ids.length) return res.status(400).json({ success: false });
@@ -1191,7 +1191,7 @@ aiRouter.post('/products/bulk-delete`', async (req, res) => {
 });
 
 // Admin Get Orders
-aiRouter.get('/orders`', async (req, res) => {
+aiRouter.get('/', async (req, res) => {
   try {
     const orders = await prisma.order.findMany({
       orderBy: { createdAt: 'desc' },
@@ -1202,7 +1202,7 @@ aiRouter.get('/orders`', async (req, res) => {
 })
 
 // Admin Update Order Status
-aiRouter.patch('/orders/:id`', async (req, res) => {
+aiRouter.patch('/', async (req, res) => {
   try {
     await prisma.order.update({ where: { id: req.params.id }, data: { status: req.body.status } });
     res.json({ success: true });
@@ -1210,7 +1210,7 @@ aiRouter.patch('/orders/:id`', async (req, res) => {
 })
 
 // Admin Update Tracking
-aiRouter.patch('/orders/:id/tracking`', async (req, res) => {
+aiRouter.patch('/', async (req, res) => {
   try {
     await prisma.order.update({ where: { id: req.params.id }, data: { trackingNumber: req.body.trackingNumber, status: req.body.status || undefined } });
     res.json({ success: true });
@@ -1218,7 +1218,7 @@ aiRouter.patch('/orders/:id/tracking`', async (req, res) => {
 })
 
 // V7 Admin Partial Refund Order
-aiRouter.post('/orders/:id/refund`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { amount, reason } = req.body;
     await prisma.order.update({
@@ -1231,7 +1231,7 @@ aiRouter.post('/orders/:id/refund`', async (req, res) => {
 })
 
 // Admin Manual Order
-aiRouter.post('/orders/admin`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { customerName, productId, price } = req.body;
     await prisma.order.create({
@@ -1254,7 +1254,7 @@ aiRouter.post('/orders/admin`', async (req, res) => {
 })
 
 // Admin Get Customers
-aiRouter.get('/customers`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const customers = await prisma.customer.findMany({ orderBy: { createdAt: 'desc' }, take: 50 });
     const activities = await prisma.adminActivity.findMany({ where: { resource: 'Customer', action: 'WALLET_TX' } });
@@ -1269,7 +1269,7 @@ aiRouter.get('/customers`', async (_req, res) => {
 })
 
 // V7 CRM Notes Fetch
-aiRouter.get('/customers/:id/notes`', async (req, res) => {
+aiRouter.get('/', async (req, res) => {
   try {
     const notes = await prisma.adminActivity.findMany({ where: { resource: 'Customer', resourceId: req.params.id, action: 'CRM_NOTE' }, orderBy: { createdAt: 'desc' }, include: { admin: true } });
     res.json({ success: true, data: notes });
@@ -1277,7 +1277,7 @@ aiRouter.get('/customers/:id/notes`', async (req, res) => {
 })
 
 // V7 CRM Note Add
-aiRouter.post('/customers/:id/notes`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { note } = req.body;
     try { await audit('CRM_NOTE', 'Customer', req.params.id, { note }); } catch(e){}
@@ -1286,7 +1286,7 @@ aiRouter.post('/customers/:id/notes`', async (req, res) => {
 })
 
 // V8 CRM Wallet Add
-aiRouter.post('/customers/:id/wallet`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { amount, reason } = req.body;
     try { await audit('WALLET_TX', 'Customer', req.params.id, { amount: Number(amount), reason }); } catch(e){}
@@ -1295,7 +1295,7 @@ aiRouter.post('/customers/:id/wallet`', async (req, res) => {
 })
 
 // Admin Update Customer
-aiRouter.patch('/customers/:id`', async (req, res) => {
+aiRouter.patch('/', async (req, res) => {
   try {
     const { firstName, lastName, email } = req.body;
     await prisma.customer.update({ where: { id: req.params.id }, data: { firstName, lastName: lastName||'', email } });
@@ -1304,11 +1304,11 @@ aiRouter.patch('/customers/:id`', async (req, res) => {
 })
 
 // Supplier CRUD — persisted to Database
-aiRouter.get('/suppliers`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try { const s = await prisma.supplier.findMany({ orderBy: { createdAt: 'desc' } }); res.json({ success: true, data: s }); }
   catch(e) { res.status(500).json({ success: false }); }
 });
-aiRouter.post('/suppliers`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { name, phone, email, notes } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'Нэр шаардлагатай' });
@@ -1316,20 +1316,20 @@ aiRouter.post('/suppliers`', async (req, res) => {
     res.json({ success: true, data: s });
   } catch(e) { res.status(500).json({ success: false }); }
 });
-aiRouter.patch('/suppliers/:id`', async (req, res) => {
+aiRouter.patch('/', async (req, res) => {
   try {
     const { name, phone, email, status, notes } = req.body;
     const s = await prisma.supplier.update({ where: { id: req.params.id }, data: { ...(name&&{name}), ...(phone&&{phone}), ...(email&&{email}), ...(status&&{status}), ...(notes&&{notes}) } });
     res.json({ success: true, data: s });
   } catch(e) { res.status(500).json({ success: false }); }
 });
-aiRouter.delete('/suppliers/:id`', async (req, res) => {
+aiRouter.delete('/', async (req, res) => {
   try { await prisma.supplier.delete({ where: { id: req.params.id } }); res.json({ success: true }); }
   catch(e) { res.status(500).json({ success: false }); }
 });
 
 // Admin Get Coupons
-aiRouter.get('/coupons`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const coupons = await prisma.coupon.findMany({ orderBy: { createdAt: 'desc' } });
     res.json({ success: true, data: coupons });
@@ -1337,7 +1337,7 @@ aiRouter.get('/coupons`', async (_req, res) => {
 })
 
 // Admin Create Coupon
-aiRouter.post('/coupons`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { code, discountValue } = req.body;
     await prisma.coupon.create({ data: { code, discountType: 'percentage', discountValue: Number(discountValue) } });
@@ -1346,7 +1346,7 @@ aiRouter.post('/coupons`', async (req, res) => {
 })
 
 // Admin Delete Coupon
-aiRouter.delete('/coupons/:id`', async (req, res) => {
+aiRouter.delete('/', async (req, res) => {
   try {
     await prisma.coupon.delete({ where: { id: req.params.id } });
     res.json({ success: true });
@@ -1354,7 +1354,7 @@ aiRouter.delete('/coupons/:id`', async (req, res) => {
 })
 
 // Admin Update Coupon
-aiRouter.patch('/coupons/:id`', async (req, res) => {
+aiRouter.patch('/', async (req, res) => {
   try {
     const { code, discountValue } = req.body;
     await prisma.coupon.update({ where: { id: req.params.id }, data: { code, discountValue: Number(discountValue) } });
@@ -1369,7 +1369,7 @@ aiRouter.patch('/coupons/:id`', async (req, res) => {
 // V5 PHASE 2 ROUTES
 
 // Admin Stats — Revenue and Order Count
-aiRouter.get('/admin/stats`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const revenue = await prisma.order.aggregate({ _sum: { grandTotal: true }, where: { status: { notIn: ['cancelled', 'deleted'] } } });
     const orders = await prisma.order.count({ where: { status: { notIn: ['cancelled', 'deleted'] } } });
@@ -1378,7 +1378,7 @@ aiRouter.get('/admin/stats`', async (_req, res) => {
 });
 
 // Admin Funnel Aggregation — Real DB Aggregation
-aiRouter.get('/admin/funnel`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const visitors = await prisma.systemEvent.count({ where: { eventType: 'PAGE_VIEW' } });
     const carts = await prisma.cart.count({ where: { items: { some: {} } } });
@@ -1389,7 +1389,7 @@ aiRouter.get('/admin/funnel`', async (_req, res) => {
 });
 
 // Admin Marketing Email Dispatch — Real recipient count from DB
-aiRouter.post('/marketing`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   const { target, subject, body } = req.body;
   if (!subject || !body) return res.status(400).json({ success: false, message: 'Гарчиг болон агуулга шаардлагатай' });
   try {
@@ -1419,7 +1419,7 @@ aiRouter.post('/marketing`', async (req, res) => {
 });
 
 // Admin Invoice Dispatch — stores invoice record and returns the order details
-aiRouter.post('/orders/:id/invoice`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const order = await prisma.order.findUnique({ where: { id: req.params.id }, include: { items: true } });
     if (!order) return res.status(404).json({ success: false, message: 'Захиалга олдсонгүй' });
@@ -1429,7 +1429,7 @@ aiRouter.post('/orders/:id/invoice`', async (req, res) => {
 });
 
 // Admin Get Variants
-aiRouter.get('/products/:id/variants`', async (req, res) => {
+aiRouter.get('/', async (req, res) => {
   try {
     const variants = await prisma.productVariant.findMany({ where: { productId: req.params.id } });
     res.json({ success: true, data: variants });
@@ -1437,7 +1437,7 @@ aiRouter.get('/products/:id/variants`', async (req, res) => {
 });
 
 // Admin Add Variant
-aiRouter.post('/products/:id/variants`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { name, stock, price, sku } = req.body;
     await prisma.productVariant.create({
@@ -1448,7 +1448,7 @@ aiRouter.post('/products/:id/variants`', async (req, res) => {
 });
 
 // Admin Delete Variant
-aiRouter.delete('/products/variants/:vid`', async (req, res) => {
+aiRouter.delete('/', async (req, res) => {
   try {
     await prisma.productVariant.delete({ where: { id: req.params.vid } });
     res.json({ success: true });
@@ -1480,7 +1480,7 @@ async function audit(action, resource, id, details) {
 }
 
 // ── GET /admin/chart-data — Real-time chart data from DB
-aiRouter.get('/admin/chart-data`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     // 7-day revenue
     const days = ['Дав','Мяг','Лха','Пүр','Баа','Бям','Ням'];
@@ -1506,7 +1506,7 @@ aiRouter.get('/admin/chart-data`', async (_req, res) => {
 });
 
 // Admin Login
-aiRouter.post('/auth/admin/login`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   const { email, password } = req.body;
   try {
     const admin = await prisma.adminUser.findUnique({ where: { email } });
@@ -1524,7 +1524,7 @@ aiRouter.post('/auth/admin/login`', async (req, res) => {
 });
 
 // Admin Get Audit Logs
-aiRouter.get('/admin/logs`', async (req, res) => {
+aiRouter.get('/', async (req, res) => {
   try {
     const logs = await prisma.adminActivity.findMany({ include: { admin: true }, orderBy: { createdAt: 'desc' }, take: 100 });
     res.json({ success: true, data: logs });
@@ -1532,7 +1532,7 @@ aiRouter.get('/admin/logs`', async (req, res) => {
 });
 
 // Mock QPay Payment Webhook
-aiRouter.post('/payments/webhook`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { orderId, status } = req.body; 
     if(status === 'PAID') {
@@ -1544,7 +1544,7 @@ aiRouter.post('/payments/webhook`', async (req, res) => {
 });
 
 // Admin Stats
-aiRouter.get('/admin/stats`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const totalOrders = await prisma.order.count();
     const totalRevenue = await prisma.order.aggregate({ _sum: { grandTotal: true } });
@@ -1554,7 +1554,7 @@ aiRouter.get('/admin/stats`', async (_req, res) => {
 })
 
 // AI Insights (enhanced with real AI analysis)
-aiRouter.get('/ai/insights`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const totalRevenue = await prisma.order.aggregate({ _sum: { grandTotal: true } });
     const totalOrders = await prisma.order.count();
@@ -1577,7 +1577,7 @@ aiRouter.get('/ai/insights`', async (_req, res) => {
 })
 
 // Admin Funnel Analytics
-aiRouter.get('/admin/funnel`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const totalOrders = await prisma.order.count();
     const paidOrders = await prisma.order.count({ where: { paymentStatus: 'paid' } });
@@ -1590,7 +1590,7 @@ aiRouter.get('/admin/funnel`', async (_req, res) => {
 })
 
 // Abandoned Carts
-aiRouter.get('/abandoned-carts`', async (_req, res) => {
+aiRouter.get('/', async (_req, res) => {
   try {
     const carts = await prisma.cart.findMany({
       where: { updatedAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
@@ -1607,7 +1607,7 @@ aiRouter.get('/abandoned-carts`', async (_req, res) => {
 });
 
 // 1. Client-Side Polling Verification (READ-ONLY)
-aiRouter.post('/storefront/checkout/verify`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { orderId } = req.body;
     if(!orderId) return res.status(400).json({ success: false, message: 'Захиалгын ID шаардлагатай' });
@@ -1626,7 +1626,7 @@ aiRouter.post('/storefront/checkout/verify`', async (req, res) => {
 });
 
 // 2. QPay Secure Webhook Endpoint (AUTHORITATIVE WRITE)
-aiRouter.post('/storefront/webhooks/qpay`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     if (authHeader !== `Bearer ${process.env.QPAY_WEBHOOK_SECRET}`) {
@@ -1712,7 +1712,7 @@ setInterval(async () => {
 }, 60000);
 
 
-aiRouter.post('/ai/recommend`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { productId, userHistory } = req.body
     const controller = new AbortController();
@@ -1749,7 +1749,7 @@ aiRouter.post('/ai/recommend`', async (req, res) => {
   }
 })
 
-aiRouter.post('/ai/describe`', async (req, res) => {
+aiRouter.post('/', async (req, res) => {
   try {
     const { productName, category, features } = req.body
     const ollamaUrl = AI_CONFIG.ollamaUrl;

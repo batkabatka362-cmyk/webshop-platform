@@ -340,6 +340,7 @@ app.use(`${BASE}/auth`, customerRouter)
 // Admin routes
 app.use(`${BASE}/admin/auth`, adminAuthRouter)
 app.use(`${BASE}/admin/dashboard`, dashboardRouter)
+app.use(`${BASE}/admin/products`, fileUploadRouter)
 app.use(`${BASE}/admin`, productAdminRouter)
 
 // System info

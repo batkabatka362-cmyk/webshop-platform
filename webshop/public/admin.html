@@ -409,7 +409,11 @@ textarea.fi { resize:vertical; min-height:90px; line-height: 1.5; }
     <div class="fg"><label>Худалдааны тайлбар</label><textarea id="p-desc" class="fi"></textarea></div>
     <div class="fg"><label>Хайлтын үгс</label><input type="text" id="p-tags" class="fi"></div>
     <div class="fg"><label>Ангилал сонгох</label><select id="p-cat" class="fi"><option value="">Ерөнхий</option></select></div>
-    <div class="fg"><label>Зурагны холбоос (URL)</label><input type="text" id="p-img" class="fi" oninput="updatePv()"><img id="p-pv" class="pv-box"></div>
+    <div class="fg"><label>Зураг (Хуулах эсвэл URL)</label>
+      <input type="file" id="p-img-file" class="fi" accept="image/*" style="margin-bottom:8px" onchange="previewFile(this)">
+      <input type="text" id="p-img" class="fi" placeholder="Эсвэл шууд URL холбоос оруулна уу" oninput="updatePv()">
+      <img id="p-pv" class="pv-box" style="margin-top:8px">
+    </div>
     <button class="btn" style="width:100%;margin-top:24px;padding:14px;font-size:16px" onclick="saveP()">Хадгалах</button>
   </div>
 </div>
@@ -859,12 +863,41 @@ async function bulkDelP() {
   if(!ids.length) return showT('Устгах бараануудаа сонгоно уу!');
   if(confirm(ids.length + ' ширхэг барааг бүрмөсөн устгах уу?')){ await fetch(API+'/api/v1/products/bulk-delete', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})}); showT('Амжилттай устгагдлаа'); loadProds(); document.getElementById('chk-all').checked=false; }
 }
-function openM(isE=false){ if(!isE){editingId=null;document.getElementById('m-title').textContent='Шинэ бараа бүртгэх';['p-name','p-price','p-cost','p-sale','p-desc','p-tags','p-img'].forEach(x=>document.getElementById(x).value='');updatePv();} document.getElementById('mo').classList.add('on'); }
+function openM(isE=false){ if(!isE){editingId=null;document.getElementById('m-title').textContent='Шинэ бараа бүртгэх';['p-name','p-price','p-cost','p-sale','p-desc','p-tags','p-img'].forEach(x=>document.getElementById(x).value='');if(document.getElementById('p-img-file'))document.getElementById('p-img-file').value='';updatePv();} document.getElementById('mo').classList.add('on'); }
 function closeM(){ document.getElementById('mo').classList.remove('on'); }
-function updatePv(){ const v=document.getElementById('p-img').value; const pv=document.getElementById('p-pv'); if(v){pv.src=v;pv.style.display='block'}else pv.style.display='none'; }
-function editP(id){ const p=ALL_PRODS.find(x=>x.id===id); if(p){editingId=id;document.getElementById('m-title').textContent='Бараа засах';document.getElementById('p-name').value=p.name||'';document.getElementById('p-price').value=p.basePrice||'';document.getElementById('p-cost').value=p.attributes?.costPrice||'';document.getElementById('p-sale').value=p.attributes?.salePrice||'';document.getElementById('p-desc').value=p.description||'';document.getElementById('p-cat').value=p.categoryId||'';document.getElementById('p-img').value=p.media?.[0]?.url||'';updatePv();openM(true);} }
+function previewFile(el) { if(el.files&&el.files[0]) { const r = new FileReader(); r.onload = e => { document.getElementById('p-pv').src = e.target.result; document.getElementById('p-pv').style.display='block'; }; r.readAsDataURL(el.files[0]); } }
+function updatePv(){ const v=document.getElementById('p-img').value; const pv=document.getElementById('p-pv'); if(v){pv.src=v;pv.style.display='block'}else if(!document.getElementById('p-img-file')||!document.getElementById('p-img-file').files.length) {pv.style.display='none';} }
+function editP(id){ const p=ALL_PRODS.find(x=>x.id===id); if(p){editingId=id;document.getElementById('m-title').textContent='Бараа засах';document.getElementById('p-name').value=p.name||'';document.getElementById('p-price').value=p.basePrice||'';document.getElementById('p-cost').value=p.attributes?.costPrice||'';document.getElementById('p-sale').value=p.attributes?.salePrice||'';document.getElementById('p-desc').value=p.description||'';document.getElementById('p-cat').value=p.categoryId||'';document.getElementById('p-img').value=p.media?.[0]?.url||'';if(document.getElementById('p-img-file'))document.getElementById('p-img-file').value='';updatePv();openM(true);} }
 async function autoGen(){ const n=document.getElementById('p-name').value.trim(); if(!n)return showT('НЭР үү?'); const b=document.getElementById('aibtn'); b.textContent='Бодож байна...'; try{const r=await fetch(API+'/api/v1/ai/generate-product',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})});const d=await r.json();if(d.success){document.getElementById('p-desc').value=d.data.description;document.getElementById('p-tags').value=d.data.seoTags;if(!document.getElementById('p-price').value)document.getElementById('p-price').value=d.data.pricePrediction;showT('AI зохиолоо! ✨')}}catch{} b.textContent='✨ AI Auto-Generate'; }
-async function saveP(){ const data={name:document.getElementById('p-name').value.trim(),basePrice:document.getElementById('p-price').value,costPrice:document.getElementById('p-cost').value,salePrice:document.getElementById('p-sale').value,description:document.getElementById('p-desc').value,categoryId:document.getElementById('p-cat').value||undefined,images:document.getElementById('p-img').value?[document.getElementById('p-img').value]:[]}; if(!data.name||!data.basePrice)return showT('Нэр, Үнэ!'); if(editingId)await fetch(API+'/api/v1/products/'+editingId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); else await fetch(API+'/api/v1/products',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); closeM(); loadProds(); showT('Амжилттай хадгаллаа!'); }
+async function saveP() {
+  let mediaUrl = document.getElementById('p-img').value;
+  const fileInput = document.getElementById('p-img-file');
+  if(fileInput && fileInput.files.length > 0) {
+    const fd = new FormData(); fd.append('image', fileInput.files[0]);
+    showT('Зураг хуулж байна...');
+    try {
+      const uResp = await fetch(API+'/api/v1/admin/products/upload', { method:'POST', headers:{'Authorization':'Bearer '+localStorage.getItem('ws_token')}, body:fd });
+      const uData = await uResp.json();
+      if(uData.success) { mediaUrl = uData.data.url || uData.data; document.getElementById('p-img').value = mediaUrl; }
+    } catch(e) { return showT('Зураг алдаа: ' + e); }
+  }
+
+  const data = {
+    name: document.getElementById('p-name').value.trim(), basePrice: Number(document.getElementById('p-price').value),
+    attributes: { costPrice: Number(document.getElementById('p-cost').value||0), salePrice: Number(document.getElementById('p-sale').value||0) },
+    description: document.getElementById('p-desc').value, categoryId: document.getElementById('p-cat').value||undefined
+  };
+  if(!data.name||!data.basePrice) return showT('Нэр, Үнэ шаардлагатай!');
+  
+  try {
+    let pId = editingId;
+    if(editingId) await fetch(API+'/api/v1/products/'+editingId, { method:'PUT', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('ws_token')}, body:JSON.stringify(data) });
+    else { const pResp = await fetch(API+'/api/v1/products', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('ws_token')}, body:JSON.stringify(data) }); const pData = await pResp.json(); if(pData.success) pId = pData.data.id; }
+    
+    if(mediaUrl && pId) { await fetch(API+'/api/v1/products/'+pId+'/media', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('ws_token')}, body:JSON.stringify({url:mediaUrl,type:'image',position:0}) }); }
+    closeM(); loadProds(); showT('Амжилттай хадгаллаа!');
+  } catch(e) { showT('Бараа хадгалахад алдаа'); }
+}
 async function delP(id){ if(confirm('Устгах уу?')){await fetch(API+'/api/v1/products/'+id,{method:'DELETE'});showT('Устгагдлаа');loadProds();} }
 
 // INITIALIZATION
