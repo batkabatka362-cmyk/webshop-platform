@@ -108,9 +108,16 @@ const API_VERSION = process.env.API_VERSION || 'v1'
 const BASE = `${API_PREFIX}/${API_VERSION}`
 
 // ─── Middleware ────────────────────────────────
+// V43 FIX: trust proxy for correct req.ip behind NGINX/reverse proxy (fixes admin audit IP logging)
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1)
+}
 app.use(helmet({ contentSecurityPolicy: false }))
+// V43 FIX: Use CORS_ORIGIN env var in production instead of allowing all origins
 app.use(cors({
-  origin: true,
+  origin: process.env.NODE_ENV === 'production'
+    ? (process.env.CORS_ORIGIN || true)
+    : true,
   credentials: true,
 }))
 app.use(compression())
@@ -349,6 +356,14 @@ app.use(`${BASE}/system`, rateLimitRouter)
 // Storefront features
 app.use(`${BASE}/storefront`, storefrontRouter)
 
+// V43: Mount missing system routers
+app.use(`${BASE}/search`, searchRouter)
+app.use(`${BASE}/coupons/admin`, couponAdminRouter)
+app.use(`${BASE}/coupons/checkout`, couponCheckoutRouter)
+app.use(`${BASE}/notifications`, notificationRouter)
+app.use(`${BASE}/shipping/admin`, shippingAdminRouter)
+app.use(`${BASE}/shipping/tracking`, trackingRouter)
+
 // AI Automation
 app.use(`${BASE}`, aiRouter)
 
@@ -358,7 +373,6 @@ app.all(`${BASE}/*`, (_req, res) => {
 })
 
 // Catch-all: serve index.html for non-API requests (Frontend SPA)
-const path = require('path');
 app.get('*', (_req, res) => {
   const indexPath = path.join(process.cwd(), 'public', 'index.html');
   res.sendFile(indexPath);

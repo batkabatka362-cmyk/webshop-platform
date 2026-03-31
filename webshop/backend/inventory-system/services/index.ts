@@ -7,6 +7,8 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { PrismaClient } from '@prisma/client'
 import { Logger } from '../../middleware/logger'
+// V43 FIX (BUG-30): Import admin auth to protect mutation endpoints
+import { adminAuth } from '../../admin-system/services'
 
 declare const prisma: PrismaClient
 
@@ -17,14 +19,15 @@ declare const prisma: PrismaClient
 export class InventoryService {
 
   async getStock(productId: string) {
-    const inv = await prisma.inventory.findFirst({ where: { productId } })
+    // V43 FIX (BUG-08): productId is @unique in schema, use findUnique for index optimization
+    const inv = await prisma.inventory.findUnique({ where: { productId } })
     if (!inv) return { productId, quantity: 0, reserved: 0, available: 0, status: 'out_of_stock' }
     const available = Math.max(0, inv.quantity - inv.reserved)
     return { ...inv, available }
   }
 
   async adjustStock(productId: string, change: number, type: string, referenceId?: string, note?: string) {
-    const inv = await prisma.inventory.findFirst({ where: { productId } })
+    const inv = await prisma.inventory.findUnique({ where: { productId } })
     if (!inv) throw new Error(`Inventory not found for product ${productId}`)
 
     const before = inv.quantity
@@ -69,7 +72,7 @@ export class InventoryService {
   }
 
   async softReserve(productId: string, quantity: number, referenceId: string) {
-    const inv = await prisma.inventory.findFirst({ where: { productId } })
+    const inv = await prisma.inventory.findUnique({ where: { productId } })
     if (!inv) throw new Error('Inventory not found')
 
     const available = inv.quantity - inv.reserved
@@ -103,7 +106,7 @@ export class InventoryService {
   }
 
   async hardReserve(productId: string, quantity: number, referenceId: string) {
-    const inv = await prisma.inventory.findFirst({ where: { productId } })
+    const inv = await prisma.inventory.findUnique({ where: { productId } })
     if (!inv) throw new Error('Inventory not found')
 
     const available = inv.quantity - inv.reserved
@@ -196,7 +199,7 @@ export class InventoryService {
   }
 
   async initInventory(productId: string, quantity: number, warehouseLocation?: string) {
-    const existing = await prisma.inventory.findFirst({ where: { productId } })
+    const existing = await prisma.inventory.findUnique({ where: { productId } })
     if (existing) throw new Error('Inventory already exists for this product')
 
     const threshold = parseInt(process.env.INVENTORY_LOW_STOCK_THRESHOLD || '10', 10)
@@ -216,7 +219,7 @@ export class InventoryService {
   }
 
   private async checkLowStock(productId: string) {
-    const inv = await prisma.inventory.findFirst({ where: { productId } })
+    const inv = await prisma.inventory.findUnique({ where: { productId } })
     if (!inv) return
 
     const available = inv.quantity - inv.reserved
@@ -247,13 +250,14 @@ inventoryRouter.get('/:productId', handle(async (req, res) => {
   res.json({ success: true, data: stock })
 }))
 
-inventoryRouter.post('/:productId/init', handle(async (req, res) => {
+// V43 FIX (BUG-30): Protect mutation endpoints with admin auth
+inventoryRouter.post('/:productId/init', adminAuth, handle(async (req, res) => {
   const { quantity, warehouseLocation } = req.body
   const inv = await inventoryService.initInventory(req.params.productId, quantity, warehouseLocation)
   res.status(201).json({ success: true, data: inv })
 }))
 
-inventoryRouter.post('/:productId/adjust', handle(async (req, res) => {
+inventoryRouter.post('/:productId/adjust', adminAuth, handle(async (req, res) => {
   const { change, type, note } = req.body
   const result = await inventoryService.adjustStock(req.params.productId, change, type || 'manual', undefined, note)
   res.json({ success: true, data: result })

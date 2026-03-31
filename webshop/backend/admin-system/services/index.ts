@@ -222,7 +222,7 @@ dashboardRouter.post('/supply-orders/:id/approve', handle(async (req, res) => {
   if (!order || order.status !== 'DRAFT') throw Object.assign(new Error('Invalid order'), { statusCode: 400 })
 
   // Use InventoryService for safe stock update — validates thresholds, logs history, and updates status
-  const { InventoryService } = await import('../inventory-system/services')
+  const { InventoryService } = await import('../../inventory-system/services')
   const invSvc = new InventoryService()
   await invSvc.adjustStock(
     order.productId,

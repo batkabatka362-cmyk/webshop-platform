@@ -45,7 +45,9 @@ const pad    = parseInt(process.env.ORDER_NUMBER_SEQUENCE_PAD || '6', 10)
 async function generateOrderNumber(): Promise<string> {
   const count = await prisma.order.count()
   const seq   = String(count + 1).padStart(pad, '0')
-  return `${prefix}-${seq}`
+  // V43 FIX: Add random suffix to prevent duplicate order numbers under concurrent requests
+  const suffix = crypto.randomBytes(2).toString('hex').toUpperCase()
+  return `${prefix}-${seq}-${suffix}`
 }
 
 function generateOrderId(): string {
@@ -248,7 +250,10 @@ export class OrderService {
   }
 
   async getOrder(idOrNumber: string) {
-    return this.repo.findById(idOrNumber) || this.repo.findByOrderNumber(idOrNumber)
+    // V43 FIX: Must await findById — Promise is always truthy so || never fell through
+    const byId = await this.repo.findById(idOrNumber)
+    if (byId) return byId
+    return this.repo.findByOrderNumber(idOrNumber)
   }
 
   async getCustomerOrders(customerId: string, page?: number, limit?: number) {

@@ -7,7 +7,13 @@ export function runSystemRecoveryWorker() {
   Logger.info('RECOVERY_WORKER', 'worker.started', { tickMs: 60000 })
   setInterval(async () => {
     try {
-      const stuckOrders = await prisma.order.findMany({ where: { status: 'pending' } });
+      // V43 FIX: Only check orders that have been pending for >30 minutes (truly stuck)
+      // Previously loaded ALL pending orders including freshly created ones + no limit = RAM overflow risk
+      const stuckThreshold = new Date(Date.now() - 30 * 60 * 1000)
+      const stuckOrders = await prisma.order.findMany({
+        where: { status: 'pending', createdAt: { lt: stuckThreshold } },
+        take: 50
+      });
       
       for (const order of stuckOrders) {
         const payment = await prisma.payment.findFirst({ 

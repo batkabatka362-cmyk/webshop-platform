@@ -120,7 +120,11 @@ export class CheckoutSessionManager {
   }
 
   async updateSession(session: CheckoutSession): Promise<CheckoutSession> {
-    session.status    = 'in_progress'
+    // V43 FIX: Only set 'in_progress' if still in 'created' state.
+    // Previously this unconditionally overwrote status, destroying 'pending_payment' / 'payment_failed' set by callers.
+    if (session.status === 'created') {
+      session.status = 'in_progress'
+    }
     session.updatedAt = new Date().toISOString()
     await sessionStore.save(session)
     await summaryCache.invalidateSummary(session.id)
@@ -142,11 +146,14 @@ export class CheckoutSessionManager {
       }
 
       // Release any inventory reservations
+      // V43 FIX: hardReserve uses checkoutId as referenceId, so release by both cartId AND checkoutId
       try {
         const { InventoryService } = await import('../../inventory-system/services')
         const inv = new InventoryService()
-        await inv.releaseReservation(session.cartId)
-        console.info(`[CHECKOUT CORE] Inventory reservations released for cart: ${session.cartId}`)
+        await inv.releaseReservation(checkoutId)
+        console.info(`[CHECKOUT CORE] Inventory reservations released for checkout: ${checkoutId}`)
+        // Also try cartId in case soft reservations were made with cartId
+        await inv.releaseReservation(session.cartId).catch(() => {})
       } catch (e) {
         console.warn(`[CHECKOUT CORE] Inventory release warning:`, (e as Error).message)
       }

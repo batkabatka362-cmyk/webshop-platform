@@ -329,7 +329,22 @@ paymentRouter.post('/callback', handle(async (req, res) => {
   if (invoiceId) {
     const payment = await prisma.payment.findFirst({ where: { gatewayRef: invoiceId } })
     if (payment && payment.status !== 'paid') {
-      await paymentService.markPaid(payment.id)
+      // V43 FIX: Server-to-server verification before marking paid.
+      // Previously anyone could POST to this endpoint and trigger markPaid without verification.
+      // Now we verify with QPay's check API if the gateway is configured.
+      if (payment.gateway === 'qpay' && qpay.isConfigured()) {
+        const verification = await qpay.checkPayment(invoiceId)
+        if (verification.paid) {
+          Logger.info('PAYMENT', 'webhook.verified.qpay', { paymentId: payment.id, invoiceId })
+          await paymentService.markPaid(payment.id, verification.paymentId)
+        } else {
+          Logger.warn('PAYMENT', 'webhook.verification.failed', { paymentId: payment.id, invoiceId, verification })
+        }
+      } else {
+        // Non-QPay gateways or QPay not configured — mark paid with warning
+        Logger.warn('PAYMENT', 'webhook.unverified.fallback', { paymentId: payment.id, gateway: payment.gateway })
+        await paymentService.markPaid(payment.id)
+      }
     }
   }
 

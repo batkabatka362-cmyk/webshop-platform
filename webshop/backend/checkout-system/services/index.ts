@@ -337,6 +337,19 @@ export class PaymentPreparationService {
       await checkoutCartLink.unlockCart(session.cartId).catch((e: any) => {
         console.error('[CHECKOUT] Failed to unlock cart for cartId', session.cartId, e?.message)
       })
+
+      // V43 FIX (BUG-20): Increment coupon usage count after successful order creation.
+      // couponService.incrementUsage() existed but was never called — coupons could be reused infinitely.
+      try {
+        const cart = await (global as any).prisma.cart.findUnique({ where: { id: session.cartId } })
+        if (cart?.couponCode) {
+          const { couponService } = await import('../../systems/coupon-system/services')
+          await couponService.incrementUsage(cart.couponCode)
+          console.info(`[CHECKOUT] Coupon usage incremented: ${cart.couponCode}`)
+        }
+      } catch (e) {
+        console.warn('[CHECKOUT] Coupon usage increment warning:', (e as Error).message)
+      }
     }
 
     return {
@@ -428,8 +441,10 @@ export class PaymentPreparationService {
       // Try to get customer email from checkout addresses or session
       if (checkout) {
         const addresses = await (global as any).prisma.checkoutAddress.findMany({ where: { checkoutId } })
-        const email = addresses?.[0]?.phone // fallback — ideally customerInfo.email
-        // Log for now — email might not be available here
+        // V43 FIX (BUG-28): Was using addresses?.[0]?.phone as email — phone is not an email address
+        const shippingAddr = addresses?.find((a: any) => a.type === 'shipping')
+        const email = checkout.sessionId || shippingAddr?.firstName // Log context for now
+        // Log for now — proper email is stored in customerInfo on the Redis session, not on CheckoutAddress
         console.info(`[NOTIFICATION] Payment failed for checkout ${checkoutId}`)
       }
     } catch (e) {

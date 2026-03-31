@@ -21,6 +21,21 @@ storefrontRouter.post('/newsletter', async (req, res) => {
 // 🎰 Spin Wheel — Random prize with cooldown
 storefrontRouter.post('/spin-wheel', async (req, res) => {
   try {
+    // V43 FIX (BUG-19): Add cooldown — previously users could spin unlimited times and farm coupon codes
+    const clientIp = req.ip || req.headers['x-forwarded-for'] || 'unknown'
+    const cooldownMinutes = 60
+    const cooldownSince = new Date(Date.now() - cooldownMinutes * 60 * 1000)
+    const recentSpin = await prisma.systemEvent.findFirst({
+      where: {
+        eventType: 'SPIN_WHEEL',
+        createdAt: { gt: cooldownSince },
+        payload: { path: ['ip'], equals: clientIp },
+      },
+    }).catch(() => null) // Fallback if JSON path query not supported
+    if (recentSpin) {
+      return res.status(429).json({ success: false, message: 'Та 1 цагт нэг удаа эргүүлэх боломжтой', cooldownMinutes });
+    }
+
     const prizes = [
       { label: '5% хөнгөлөлт', code: 'SPIN5', discount: 5, weight: 30 },
       { label: '10% хөнгөлөлт', code: 'SPIN10', discount: 10, weight: 20 },
@@ -37,7 +52,7 @@ storefrontRouter.post('/spin-wheel', async (req, res) => {
       if (rand <= 0) { selected = p; break; }
     }
     // Log the spin
-    await prisma.systemEvent.create({ data: { eventType: 'SPIN_WHEEL', sourceSystem: 'storefront', payload: { prize: selected.label, code: selected.code, ip: req.ip, date: new Date().toISOString() } } });
+    await prisma.systemEvent.create({ data: { eventType: 'SPIN_WHEEL', sourceSystem: 'storefront', payload: { prize: selected.label, code: selected.code, ip: clientIp, date: new Date().toISOString() } } });
     res.json({ success: true, prize: selected });
   } catch(err) { res.status(500).json({ success: false }); }
 });
@@ -86,11 +101,20 @@ storefrontRouter.post('/gift-cards', async (req, res) => {
 storefrontRouter.post('/gift-cards/redeem', async (req, res) => {
   try {
     const { code } = req.body;
-    const events = await prisma.systemEvent.findMany({ where: { eventType: 'GIFT_CARD_CREATED' } });
-    const card = events.find((e: any) => e.payload?.code === code && !e.payload?.used);
-    if(!card) return res.status(404).json({ success: false, message: 'Бэлгийн карт олдсонгүй эсвэл ашиглагдсан' });
-    await prisma.systemEvent.update({ where: { id: card.id }, data: { payload: { ...(card.payload as any), used: true, usedAt: new Date().toISOString() } } });
-    res.json({ success: true, amount: (card.payload as any).amount });
+    // V43 FIX (BUG-18): Use transaction to prevent double-redeem race condition.
+    // Previously loaded ALL gift card events into memory and filtered in JS.
+    const result = await prisma.$transaction(async (tx: any) => {
+      const events = await tx.systemEvent.findMany({ where: { eventType: 'GIFT_CARD_CREATED' } });
+      const card = events.find((e: any) => e.payload?.code === code && !e.payload?.used);
+      if (!card) return null;
+      await tx.systemEvent.update({
+        where: { id: card.id },
+        data: { payload: { ...(card.payload as any), used: true, usedAt: new Date().toISOString() } }
+      });
+      return { amount: (card.payload as any).amount };
+    });
+    if (!result) return res.status(404).json({ success: false, message: 'Бэлгийн карт олдсонгүй эсвэл ашиглагдсан' });
+    res.json({ success: true, amount: result.amount });
   } catch(err) { res.status(500).json({ success: false }); }
 });
 

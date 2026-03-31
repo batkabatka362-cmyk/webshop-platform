@@ -518,7 +518,7 @@ textarea.fi { resize:vertical; min-height:90px; line-height: 1.5; }
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-const API = 'https://webshop-platform-production.up.railway.app';
+const API = ''; // Use relative paths
 let ALL_PRODS = [], cats = [], ALL_CUS = [], ALL_CP = [], ALL_SUP = [];
 let editingId = null;
 let editingTrackId = null;
@@ -884,6 +884,7 @@ async function saveP() {
 
   const data = {
     name: document.getElementById('p-name').value.trim(), basePrice: Number(document.getElementById('p-price').value),
+    sku: 'WS-' + Date.now().toString(36).toUpperCase(),
     attributes: { costPrice: Number(document.getElementById('p-cost').value||0), salePrice: Number(document.getElementById('p-sale').value||0) },
     description: document.getElementById('p-desc').value, categoryId: document.getElementById('p-cat').value||undefined
   };
@@ -891,7 +892,7 @@ async function saveP() {
   
   try {
     let pId = editingId;
-    if(editingId) await fetch(API+'/api/v1/products/'+editingId, { method:'PUT', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('ws_token')}, body:JSON.stringify(data) });
+    if(editingId) await fetch(API+'/api/v1/products/'+editingId, { method:'PATCH', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('ws_token')}, body:JSON.stringify(data) });
     else { const pResp = await fetch(API+'/api/v1/products', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('ws_token')}, body:JSON.stringify(data) }); const pData = await pResp.json(); if(pData.success) pId = pData.data.id; }
     
     if(mediaUrl && pId) { await fetch(API+'/api/v1/products/'+pId+'/media', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('ws_token')}, body:JSON.stringify({url:mediaUrl,type:'image',position:0}) }); }

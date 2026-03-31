@@ -124,7 +124,14 @@ export class CustomerAuthService {
       include: { addresses: true },
     })
     if (!customer) throw Object.assign(new Error('Customer not found'), { statusCode: 404 })
-    return this.sanitize(customer)
+    
+    // Fetch orders separately since relation is missing in schema
+    const orders = await prisma.order.findMany({
+      where: { customerId },
+      orderBy: { createdAt: 'desc' }
+    })
+    
+    return { ...this.sanitize(customer), orders }
   }
 
   async updateProfile(customerId: string, data: z.infer<typeof UpdateProfileSchema>) {

@@ -1057,7 +1057,7 @@ body.light-mode nav.s{background:rgba(255,255,255,.85)}
 
 <script>
 // V9 Frontend Authentication variables
-const API = 'https://webshop-platform-production.up.railway.app'; // Live Cloud Database Back-end
+const API = ''; // Use relative paths for local development and unified deployment
 
 const P_IMGS=['https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=400&q=80','https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&q=80','https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&q=80','https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=400&q=80','https://images.unsplash.com/photo-1583394838336-acd977736f90?w=400&q=80','https://images.unsplash.com/photo-1484704849700-f032a568e944?w=400&q=80','https://images.unsplash.com/photo-1606813907291-d86efa9b94db?w=400&q=80','https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=400&q=80'];
 
@@ -1518,7 +1518,7 @@ async function doFinalCheckout() {
     };
     
     // Simulate robust API payload appending if needed
-    const r=await fetch(API+'/api/v1/storefront/checkout', { method:'POST', headers:apiHeaders(), body:JSON.stringify(payload) });
+    const r=await fetch(API+'/api/v1/checkout', { method:'POST', headers:apiHeaders(), body:JSON.stringify(payload) });
     const d=await r.json();
     if(d.success) {
       document.getElementById('qsub').textContent = 'Нийт төлөх дүн: ₮'+d.grandTotal.toLocaleString();
@@ -1554,9 +1554,9 @@ async function doAuth(){
   const email=document.getElementById('a-em').value, password=document.getElementById('a-pw').value;
   const payload=authMode==='register'?{firstName:document.getElementById('a-fn').value,lastName:document.getElementById('a-ln').value,email,password}:{email,password};
   try{
-    const r=await fetch(API+'/api/v1/storefront/auth/'+authMode,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const r=await fetch(API+'/api/v1/auth/'+authMode,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const d=await r.json();
-    if(d.success){ authToken=d.token; localStorage.setItem('ws_token',authToken); document.getElementById('cw-row').style.display='flex'; loadMe(); }
+    if(d.success){ authToken=d.data.accessToken; localStorage.setItem('ws_token',authToken); document.getElementById('cw-row').style.display='flex'; loadMe(); }
     else showT(d.message);
   }catch{}
 }
@@ -1564,12 +1564,13 @@ function logOut(){ authToken=''; localStorage.removeItem('ws_token'); document.g
 async function loadMe(){
   document.getElementById('auth-unlogged').style.display='none'; document.getElementById('auth-logged').style.display='block'; document.getElementById('cw-row').style.display='flex';
   try{
-    const r=await fetch(API+'/api/v1/storefront/me',{headers:apiHeaders()});
+    const r=await fetch(API+'/api/v1/auth/profile',{headers:apiHeaders()});
     const d=await r.json();
     if(d.success) {
-      document.getElementById('my-name').textContent=d.user.firstName+' '+d.user.lastName+' ('+d.user.email+')';
-      document.getElementById('my-wallet').textContent='₮'+(d.user.wallet||0).toLocaleString();
-      document.getElementById('my-orders').innerHTML=d.user.orders.map(o=>`<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05)">Огноо: ${new Date(o.createdAt).toLocaleDateString()}, Дүн: ₮${o.grandTotal.toLocaleString()} (${o.paymentStatus})</div>`).join('')||'Захиалга алга';
+      const user = d.data;
+      document.getElementById('my-name').textContent=user.firstName+' '+user.lastName+' ('+user.email+')';
+      document.getElementById('my-wallet').textContent='₮'+(user.wallet||0).toLocaleString();
+      document.getElementById('my-orders').innerHTML=(user.orders||[]).map(o=>`<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05)">Огноо: ${new Date(o.createdAt).toLocaleDateString()}, Дүн: ₮${o.grandTotal.toLocaleString()} (${o.paymentStatus})</div>`).join('')||'Захиалга алга';
     } else { logOut(); }
   }catch{}
 }
