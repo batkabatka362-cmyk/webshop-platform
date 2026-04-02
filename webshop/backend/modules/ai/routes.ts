@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { Logger } from '../../middleware/logger';
+import { RealtimeService } from '../../infrastructure/realtime.service';
 
 export const aiRouter = Router();
 // ISOLATED PRISMA INSTANCE (Rule 3)
@@ -106,7 +107,11 @@ async function spendAiCapital(amount: number) {
 }
 
 async function saveAiLog(agent: string, action: string, details: any) {
-  try { await prisma.aiAgentLog.create({ data: { agent, action, details } }); } catch(err){}
+  try { 
+    const log = await prisma.aiAgentLog.create({ data: { agent, action, details } }); 
+    // V44: Real-time brain feed
+    RealtimeService.emitAiBrain(log);
+  } catch(err){}
 }
 async function saveAiMemory(context: string, type: string) {
   try { await prisma.aiMemory.create({ data: { context, type } }); } catch(err){}
@@ -1588,6 +1593,212 @@ aiRouter.get('/admin/funnel-analytics', async (_req, res) => {
     res.json({ success: true, data: { visitors, carts, checkouts, conversions: totalOrders } });
   } catch(err) { res.status(500).json({ success: false }); }
 })
+
+// ═══════════════════════════════════════════════════════
+// FEATURE 1: 📊 LIVE ANALYTICS ENDPOINTS
+// ═══════════════════════════════════════════════════════
+
+// GET /api/v1/admin/revenue-chart — Real 7-day revenue from DB
+aiRouter.get('/admin/revenue-chart', async (_req, res) => {
+  try {
+    const days = 7;
+    const labels: string[] = [];
+    const data: number[] = [];
+    
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      date.setHours(0, 0, 0, 0);
+      const nextDate = new Date(date);
+      nextDate.setDate(nextDate.getDate() + 1);
+      
+      labels.push(['Ням','Дав','Мяг','Лха','Пүр','Баа','Бям'][date.getDay()]);
+      
+      const orders = await prisma.order.findMany({
+        where: { createdAt: { gte: date, lt: nextDate }, paymentStatus: { in: ['paid', 'partially_refunded'] } }
+      });
+      const dayRevenue = orders.reduce((sum: number, o: any) => sum + (o.grandTotal || 0), 0);
+      data.push(dayRevenue);
+    }
+    
+    res.json({ success: true, data: { labels, data } });
+  } catch(err) {
+    // Graceful fallback for limited mode
+    const labels = ['Дав','Мяг','Лха','Пүр','Баа','Бям','Ням'];
+    const data = labels.map(() => 0);
+    res.json({ success: true, data: { labels, data, limited: true } });
+  }
+});
+
+// GET /api/v1/admin/top-products — Top 5 best-selling products
+aiRouter.get('/admin/top-products', async (_req, res) => {
+  try {
+    const topItems = await prisma.orderItem.groupBy({
+      by: ['productId'],
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: 'desc' } },
+      take: 5
+    });
+    
+    const productIds = topItems.map((i: any) => i.productId).filter(Boolean);
+    const products = productIds.length > 0 
+      ? await prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true, name: true } })
+      : [];
+    
+    const labels = topItems.map((i: any) => {
+      const p = products.find((p: any) => p.id === i.productId);
+      return p?.name?.slice(0, 16) || 'Бараа';
+    });
+    const data = topItems.map((i: any) => i._sum.quantity || 0);
+    
+    res.json({ success: true, data: { labels, data } });
+  } catch(err) {
+    res.json({ success: true, data: { labels: [], data: [], limited: true } });
+  }
+});
+
+// GET /api/v1/admin/category-breakdown — Orders by category
+aiRouter.get('/admin/category-breakdown', async (_req, res) => {
+  try {
+    const items = await prisma.orderItem.findMany({
+      include: { product: { include: { category: true } } },
+      take: 500
+    });
+    
+    const catMap: Record<string, number> = {};
+    items.forEach((item: any) => {
+      const cat = item.product?.category?.name || 'Бусад';
+      catMap[cat] = (catMap[cat] || 0) + (item.quantity || 1);
+    });
+    
+    const labels = Object.keys(catMap);
+    const data = Object.values(catMap);
+    const colors = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6'];
+    
+    res.json({ success: true, data: { labels, data, colors: colors.slice(0, labels.length) } });
+  } catch(err) {
+    res.json({ success: true, data: { labels: ['Бусад'], data: [1], colors: ['#6366f1'], limited: true } });
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// FEATURE 2: 💳 MOCK QPAY PAYMENT SIMULATOR
+// ═══════════════════════════════════════════════════════
+
+// POST /api/v1/payments/qpay/mock-pay — Simulate QPay payment success
+aiRouter.post('/payments/qpay/mock-pay', async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    if (!orderId) return res.status(400).json({ success: false, message: 'orderId шаардлагатай' });
+    
+    const order = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true } });
+    if (!order) return res.status(404).json({ success: false, message: 'Захиалга олдсонгүй' });
+    
+    if (order.paymentStatus === 'paid') {
+      return res.json({ success: true, message: 'Захиалга аль хэдийн төлөгдсөн байна', orderNumber: order.orderNumber });
+    }
+    
+    // Process payment atomically
+    const updated = await prisma.order.update({
+      where: { id: orderId },
+      data: { paymentStatus: 'paid', status: 'processing' }
+    });
+    
+    // Notify admin in real time via Socket.io
+    const { io } = await import('../../server');
+    io.to('admin_room').emit('payment_confirmed', {
+      orderId: updated.id,
+      orderNumber: updated.orderNumber,
+      total: updated.grandTotal,
+      time: new Date().toLocaleTimeString()
+    });
+    // Also fire new_order notification for admin dashbaord refresh
+    io.to('admin_room').emit('new_order', {
+      id: updated.id,
+      orderNumber: updated.orderNumber,
+      total: updated.grandTotal,
+      customer: updated.guestEmail || 'Зочин',
+      time: new Date().toLocaleTimeString()
+    });
+    
+    Logger.info('PAYMENT', 'mock_qpay.success', { orderId, orderNumber: updated.orderNumber });
+    res.json({ success: true, message: `QPay төлбөр амжилттай! Захиалга #${updated.orderNumber}`, orderNumber: updated.orderNumber });
+  } catch(err: any) {
+    Logger.error('PAYMENT', 'mock_qpay.error', { error: err.message });
+    res.status(500).json({ success: false, message: 'Алдаа гарлаа' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// FEATURE 3: 🤖 AI SEMANTIC SEARCH
+// ═══════════════════════════════════════════════════════
+
+// POST /api/v1/storefront/ai/search — Natural language product search
+aiRouter.post('/storefront/ai-search', async (req, res) => {
+  try {
+    const { query } = req.body;
+    if (!query) return res.status(400).json({ success: false, message: 'Хайлтын үг шаардлагатай' });
+    
+    // Step 1: Try AI to extract product intent keywords
+    let keywords: string[] = [query];
+    try {
+      const aiResp = await aiCall(
+        `User is searching on a Mongolian e-commerce store. Query: "${query}"
+Extract 2-4 relevant product keywords in Mongolian/English. Return ONLY comma-separated keywords. No explanation.
+Example: "phone, charger, 65W"`,
+        'You are a product search keyword extractor. Always return only comma-separated keywords.'
+      );
+      const extracted = aiResp.split(',').map(k => k.trim()).filter(k => k.length > 1 && k.length < 30);
+      if (extracted.length > 0) keywords = extracted;
+    } catch { /* use original query as fallback */ }
+    
+    // Step 2: Search DB with extracted keywords (OR search across all keywords)
+    const allResults = await Promise.all(
+      keywords.map(kw => 
+        prisma.product.findMany({
+          where: {
+            OR: [
+              { name: { contains: kw } },
+              { description: { contains: kw } },
+              { seoTags: { contains: kw } },
+            ],
+            status: 'active'
+          },
+          include: { media: true, category: true },
+          take: 6
+        })
+      )
+    );
+    
+    // Deduplicate results
+    const seen = new Set<string>();
+    const products = allResults.flat().filter((p: any) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    }).slice(0, 12);
+    
+    // Step 3: Fallback to DB keyword search if AI extracted nothing useful
+    if (products.length === 0) {
+      const fallback = await prisma.product.findMany({
+        where: {
+          OR: [
+            { name: { contains: query } },
+            { description: { contains: query } },
+          ],
+          status: 'active'
+        },
+        include: { media: true, category: true },
+        take: 12
+      });
+      return res.json({ success: true, data: { products: fallback, keywords, aiPowered: false } });
+    }
+    
+    res.json({ success: true, data: { products, keywords, aiPowered: true } });
+  } catch(err: any) {
+    res.status(500).json({ success: false, message: 'Хайлт амжилтгүй боллоо' });
+  }
+});
 
 // Abandoned Carts
 aiRouter.get('/abandoned-carts-simple', async (_req, res) => {

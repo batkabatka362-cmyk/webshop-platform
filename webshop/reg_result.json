@@ -1,0 +1,16 @@
+﻿{
+    "customer":  {
+                     "id":  "6c137f7e-634b-49ed-a22c-8de06f2a78f2",
+                     "email":  "checkxp9@test.mn",
+                     "phone":  null,
+                     "firstName":  "CheckXp",
+                     "lastName":  "TestLevel",
+                     "isActive":  true,
+                     "isVerified":  false,
+                     "lastLoginAt":  null,
+                     "createdAt":  "2026-04-02T10:40:19.656Z",
+                     "updatedAt":  "2026-04-02T10:40:19.656Z"
+                 },
+    "accessToken":  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2YzEzN2Y3ZS02MzRiLTQ5ZWQtYTIyYy04ZGUwNmYyYTc4ZjIiLCJlbWFpbCI6ImNoZWNreHA5QHRlc3QubW4iLCJ0eXBlIjoiY3VzdG9tZXIiLCJpYXQiOjE3NzUxMjY0MTksImV4cCI6MTc3NTEyNzMxOX0.4wD27vdXxk-l6uxbn0kiBor_rQqdDEowJgEqm-cj4O4",
+    "refreshToken":  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2YzEzN2Y3ZS02MzRiLTQ5ZWQtYTIyYy04ZGUwNmYyYTc4ZjIiLCJlbWFpbCI6ImNoZWNreHA5QHRlc3QubW4iLCJ0eXBlIjoicmVmcmVzaCIsImlhdCI6MTc3NTEyNjQxOSwiZXhwIjoxNzc1NzMxMjE5fQ.qI0o0SjqxJLabK5rCzf3dg9La8CzdAtsgJCL86ajwBY"
+}

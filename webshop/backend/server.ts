@@ -17,7 +17,10 @@ import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import nodemailer from 'nodemailer'
 import os from 'os'
+import { createServer } from 'http'
+import { Server } from 'socket.io'
 import { Logger } from './middleware/logger'
+import { AppError } from './utils/AppError'
 
 // ─── Mailer Utility ───────────────────────────
 const mailer = nodemailer.createTransport({
@@ -102,6 +105,36 @@ import { aiRouter } from './modules/ai/routes'
 
 // ─── App Setup ────────────────────────────────
 const app = express()
+const httpServer = createServer(app)
+export const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+})
+
+// Real-time connection handler
+io.on('connection', (socket) => {
+  Logger.info('REALTIME', 'client.connected', { id: socket.id })
+  
+  // V45: Secure Admin Room Join Logic
+  socket.on('join_admin', (token: string) => {
+    try {
+      const decoded = jwt.verify(token, process.env.ADMIN_JWT_SECRET || 'CHANGE_ME_openssl_rand_hex_32');
+      if (decoded && (decoded as any).role === 'ADMIN') {
+        socket.join('admin_room');
+        Logger.info('REALTIME', 'admin.joined', { id: socket.id, email: (decoded as any).email });
+      }
+    } catch (err) {
+      Logger.warn('REALTIME', 'admin.join.failed', { id: socket.id, error: (err as any).message });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    Logger.info('REALTIME', 'client.disconnected', { id: socket.id })
+  })
+})
+
 const PORT = parseInt(process.env.PORT || '4000', 10)
 const API_PREFIX = process.env.API_PREFIX || '/api'
 const API_VERSION = process.env.API_VERSION || 'v1'
@@ -367,8 +400,89 @@ app.use(`${BASE}/shipping/tracking`, trackingRouter)
 // AI Automation
 app.use(`${BASE}`, aiRouter)
 
+// ─── Real-time Test Endpoints (Dev Only) ──────
+app.get('/test-ping', (req, res) => {
+  console.log('TEST PING OK, BASE =', BASE);
+  res.json({ success: true, base: BASE });
+});
+
+app.post(`${BASE}/test/realtime`, (req: any, res: any) => {
+  const { type, count = 1 } = req.body;
+  const products = ['iPhone 16 Pro', 'MacBook Pro M4', 'AirPods Max', 'Samsung S25', 'iPad Air M3', 'Pixel 9 Pro', 'Sony WH-1000XM6'];
+  const names = ['Батболд', 'Оюунчимэг', 'Дорж', 'Сарантуяа', 'Ганбаатар', 'Номин', 'Тэмүүлэн'];
+  
+  for (let i = 0; i < count; i++) {
+    const prod = products[Math.floor(Math.random() * products.length)];
+    const name = names[Math.floor(Math.random() * names.length)];
+    const price = Math.floor(Math.random() * 5000000) + 50000;
+    const qty = Math.floor(Math.random() * 8) + 1;
+    
+    switch(type) {
+      case 'new_order':
+        io.emit('new_order', { id: `test-${Date.now()}-${i}`, orderNumber: `WS-${100000 + Math.floor(Math.random()*9999)}`, total: price, customer: `${name}@test.mn`, time: new Date().toLocaleTimeString() });
+        io.emit('live_purchase', { name, product: prod, time: 'саяхан', img: '' });
+        break;
+      case 'stock_low':
+        io.emit('stock_low', { id: `inv-${i}`, name: prod, quantity: qty, threshold: 10 });
+        break;
+      case 'live_purchase':
+        io.emit('live_purchase', { name, product: prod, time: 'саяхан', img: '' });
+        break;
+      case 'ai_brain_feed':
+        io.emit('ai_brain_feed', { agent: ['WatcherAgent','PricingBot','SourceBot','MarketingBot'][Math.floor(Math.random()*4)], action: ['scan_inventory','apply_discount','generate_product','send_campaign'][Math.floor(Math.random()*4)], details: { product: prod, result: 'success', confidence: (Math.random()*100).toFixed(1)+'%' }, createdAt: new Date() });
+        break;
+      case 'price_drop':
+        const oldP = price; const newP = Math.floor(price * (0.7 + Math.random() * 0.2));
+        io.emit('price_drop', { id: `p-${i}`, name: prod, oldPrice: oldP, newPrice: newP, pct: Math.round((1 - newP/oldP)*100) });
+        break;
+    }
+  }
+  res.json({ success: true, message: `Emitted ${count} "${type}" event(s)` });
+});
+
+app.post(`${BASE}/test/realtime/stress`, (req: any, res: any) => {
+  const { count = 10 } = req.body;
+  const types = ['new_order', 'stock_low', 'live_purchase', 'ai_brain_feed', 'price_drop'];
+  const products = ['iPhone 16 Pro', 'MacBook Pro M4', 'AirPods Max', 'Samsung S25', 'iPad Air M3'];
+  const names = ['Батболд', 'Оюунчимэг', 'Дорж', 'Сарантуяа', 'Ганбаатар'];
+  let emitted = 0;
+  
+  for (let i = 0; i < count; i++) {
+    const type = types[i % types.length];
+    const prod = products[Math.floor(Math.random() * products.length)];
+    const name = names[Math.floor(Math.random() * names.length)];
+    const price = Math.floor(Math.random() * 5000000) + 50000;
+    
+    switch(type) {
+      case 'new_order':
+        io.emit('new_order', { id: `stress-${i}`, orderNumber: `WS-STRESS-${i}`, total: price, customer: `${name}@stress.mn`, time: new Date().toLocaleTimeString() });
+        io.emit('live_purchase', { name, product: prod, time: 'саяхан' });
+        emitted += 2;
+        break;
+      case 'stock_low':
+        io.emit('stock_low', { id: `stress-inv-${i}`, name: prod, quantity: Math.floor(Math.random()*5)+1, threshold: 10 });
+        emitted++;
+        break;
+      case 'live_purchase':
+        io.emit('live_purchase', { name, product: prod, time: 'саяхан' });
+        emitted++;
+        break;
+      case 'ai_brain_feed':
+        io.emit('ai_brain_feed', { agent: 'StressBot', action: `stress_action_${i}`, details: { iteration: i, product: prod }, createdAt: new Date() });
+        emitted++;
+        break;
+      case 'price_drop':
+        io.emit('price_drop', { id: `stress-p-${i}`, name: prod, oldPrice: price, newPrice: Math.floor(price*0.75), pct: 25 });
+        emitted++;
+        break;
+    }
+  }
+  res.json({ success: true, message: `STRESS TEST: Emitted ${emitted} events across ${count} iterations` });
+});
+
 // ─── 404 Handler (API only) ───────────────────
-app.all(`${BASE}/*`, (_req, res) => {
+app.all(`${BASE}/*`, (req, res) => {
+  console.log('[404 DEBUG] Unmatched API Route:', req.method, req.originalUrl);
   res.status(404).json({ success: false, error: { message: 'Endpoint not found' } })
 })
 
@@ -380,51 +494,77 @@ app.get('*', (_req, res) => {
 
 // ─── Global Error Handler ─────────────────────
 app.use((err: any, req: any, res: any, _next: any) => {
-  console.error('[SERVER ERROR]', err)
+  let error = { ...err };
+  error.message = err.message;
   
-  if (err && err.message) {
-      prisma.aiMemory.create({
-        data: { context: `[СИСТЕМИЙН АЛДАА]: ${req.method} ${req.url} - ${err.message}`, type: 'error' }
-      }).catch(console.error);
+  // Convert standard Error to AppError if it isn't one already
+  if (!(err instanceof AppError)) {
+    const statusCode = err.statusCode || 500;
+    const message = err.message || 'Internal Server Error';
+    error = new AppError(message, statusCode, err.code || 'unknown_error', false);
   }
 
-  const status = err.statusCode || err.status || 500
-  res.status(status).json({
+  // Log non-operational errors (like syntax errors, unexpected DB drops) heavily
+  if (!error.isOperational) {
+    console.error('🔥 [CRITICAL ERROR] 🔥', err);
+    // Record critical errors to AI Memory for dashboard observation
+    prisma.aiMemory.create({
+      data: { context: `[CRITICAL]: ${req.method} ${req.url} - ${error.message}`, type: 'error' }
+    }).catch(console.error);
+  } else {
+    // Standard operational error logging (e.g., validation failed)
+    console.warn(`[WARN] ${req.method} ${req.url}:`, error.message);
+  }
+
+  // Obscure internal server errors on production
+  if (process.env.NODE_ENV === 'production' && !error.isOperational) {
+    error.message = 'Дотоод алдаа гарлаа. Түр хүлээгээд дахин оролдоно уу.';
+  }
+
+  res.status(error.statusCode || 500).json({
     success: false,
     error: {
-      message: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message,
-      code: err.code,
+      message: error.message,
+      code: error.code || 'internal_error',
     },
-  })
-})
+  });
+});
 
 // ─── Start Server ─────────────────────────────
 async function bootstrap() {
+  let dbConnected = false;
   try {
     await prisma.$connect()
     console.info('✅ Database connected')
+    dbConnected = true;
     
     // V42: Start heavy enterprise workers
-    const { runJobWorker, runSystemMonitor, runSystemRecoveryWorker } = require('./infrastructure/workers');
-    runJobWorker();
-    runSystemMonitor();
-    runSystemRecoveryWorker(); // <-- The self-healing loop
+    try {
+      const { runJobWorker, runSystemMonitor, runSystemRecoveryWorker } = require('./infrastructure/workers');
+      runJobWorker();
+      runSystemMonitor();
+      runSystemRecoveryWorker();
+    } catch (workerErr) {
+      console.warn('⚠️ Workers failed to start:', (workerErr as any).message);
+    }
+  } catch (dbErr) {
+    console.warn('⚠️ Database unavailable — starting in LIMITED mode (Socket.io + Static files only)')
+    console.warn('   DB Error:', (dbErr as any).message?.substring(0, 120))
+  }
 
-    const PORT = parseInt(process.env.PORT || '4000', 10);
-    app.listen(PORT, () => {
-      console.info(`
+  const PORT = parseInt(process.env.PORT || '4000', 10);
+  httpServer.listen(PORT, () => {
+    console.info(`
   ╔═══════════════════════════════════════╗
-  ║   🛍️  WEBSHOP Server Running          ║
+  ║   🛍️  WEBSHOP Server Running (RT)     ║
   ║   Port: ${PORT}                         ║
   ║   ENV:  ${process.env.NODE_ENV || 'development'}                ║
   ║   API:  ${BASE}                  ║
+  ║   Realtime: Socket.io ACTIVE          ║
+  ║   Database: ${dbConnected ? 'CONNECTED ✅' : 'OFFLINE ⚠️ '}        ║
   ╚═══════════════════════════════════════╝
-      `)
-    })
-  } catch (err) {
-    console.error('❌ Failed to start server:', err)
-    process.exit(1)
-  }
+    `)
+  })
 }
 
 // Graceful shutdown

@@ -1,0 +1,23 @@
+﻿{
+  "ACCESS_JWT_SECRET": "prod_secret_123",
+  "DATABASE_DIRECT_URL": "postgresql://postgres:VxYiTAWWKqEsSQfIFuGlThFfnvaRMarq@postgres.railway.internal:5432/railway",
+  "DATABASE_URL": "postgresql://postgres:VxYiTAWWKqEsSQfIFuGlThFfnvaRMarq@postgres.railway.internal:5432/railway",
+  "NODE_ENV": "production",
+  "PORT": "4000",
+  "QPAY_PASSWORD": "mock",
+  "QPAY_USERNAME": "qpay_mock",
+  "RAILWAY_ENVIRONMENT": "production",
+  "RAILWAY_ENVIRONMENT_ID": "53824dc9-2e64-4ef6-9ef9-44cb2ca1a457",
+  "RAILWAY_ENVIRONMENT_NAME": "production",
+  "RAILWAY_PRIVATE_DOMAIN": "webshop-platform.railway.internal",
+  "RAILWAY_PROJECT_ID": "2badd352-df85-4d63-98c5-9cc5ead98213",
+  "RAILWAY_PROJECT_NAME": "webshop-platform",
+  "RAILWAY_PUBLIC_DOMAIN": "webshop-platform-production.up.railway.app",
+  "RAILWAY_SERVICE_ID": "94afaff7-ea36-459d-a327-321a5ad623e0",
+  "RAILWAY_SERVICE_NAME": "webshop-platform",
+  "RAILWAY_SERVICE_WEBSHOP_PLATFORM_URL": "webshop-platform-production.up.railway.app",
+  "RAILWAY_STATIC_URL": "webshop-platform-production.up.railway.app",
+  "REDIS_URL": "redis://default:vZSCvvxXPgWhBMBlggdKCMSXflQTsHfA@redis.railway.internal:6379",
+  "REFRESH_JWT_SECRET": "refresh_secret_123",
+  "SYSTEM_INTERNAL_TOKEN": "internal_token_123"
+}

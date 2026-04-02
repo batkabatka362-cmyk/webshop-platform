@@ -84,3 +84,18 @@ couponCheckoutRouter.post('/apply-coupon', handle(async (req, res) => {
 
   res.json({ success: true, data: result })
 }))
+
+couponCheckoutRouter.post('/validate', handle(async (req, res) => {
+  const { code } = req.body
+  if (!code) return res.status(400).json({ success: false, message: 'Code required' })
+  
+  const { PrismaClient } = require('@prisma/client')
+  const prisma = new PrismaClient()
+  const coupon = await prisma.coupon.findUnique({ where: { code: code.toUpperCase() } })
+  
+  if (!coupon || !coupon.active) return res.json({ success: false })
+  if (coupon.expiresAt && coupon.expiresAt < new Date()) return res.json({ success: false })
+  if (coupon.usageLimit > 0 && coupon.usageCount >= coupon.usageLimit) return res.json({ success: false })
+  
+  res.json({ success: true, data: { discountValue: coupon.discountValue, type: coupon.discountType } })
+}))

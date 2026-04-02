@@ -9,6 +9,7 @@ import { PrismaClient } from '@prisma/client'
 import { Logger } from '../../middleware/logger'
 // V43 FIX (BUG-30): Import admin auth to protect mutation endpoints
 import { adminAuth } from '../../admin-system/services'
+import { RealtimeService } from '../../infrastructure/realtime.service'
 
 declare const prisma: PrismaClient
 
@@ -229,6 +230,12 @@ export class InventoryService {
 
     if (status !== inv.status) {
       await prisma.inventory.update({ where: { id: inv.id }, data: { status } })
+      
+      // V44: Real-time notification for low stock
+      if (status === 'low_stock' || status === 'out_of_stock') {
+        const product = await prisma.product.findUnique({ where: { id: productId } })
+        if (product) RealtimeService.notifyStockLow(product, available)
+      }
     }
   }
 }

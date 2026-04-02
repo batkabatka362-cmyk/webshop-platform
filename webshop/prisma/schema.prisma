@@ -42,6 +42,7 @@ model Product {
   variants  ProductVariant[]
   media     ProductMedia[]
   inventory Inventory?
+  supplyOrders SupplyOrder[]
 
   @@index([slug])
   @@index([categoryId])
@@ -222,12 +223,17 @@ model Customer {
   lastLoginAt   DateTime?
   loginAttempts Int       @default(0)
   lockedUntil   DateTime?
+  xp            Int       @default(0)           // Gamification: Experience Points
+  level         String    @default("Bronze")    // Gamification: Bronze, Silver, Gold, VIP
+  walletBalance Float     @default(0)           // Gamification: Store Credit / Affiliate Payout
+  affiliateCode String?   @unique               // Affiliate: Custom referral code e.g. "DORJ99"
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   addresses CustomerAddress[]
 
   @@index([email])
+  @@index([affiliateCode])
   @@map("customers")
 }
 
@@ -428,6 +434,8 @@ model Order {
   notes           String?
   fraudScore      Int       @default(0)
   fraudReason     String?   @db.Text
+  affiliateCode   String?   // The referral code that generated this sale
+  affiliateReward Float     @default(0) // How much the referrer earned from this sale
   placedAt        DateTime
   confirmedAt     DateTime?
   processedAt     DateTime?

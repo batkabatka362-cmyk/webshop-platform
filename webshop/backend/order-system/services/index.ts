@@ -9,6 +9,7 @@ import { PrismaClient } from '@prisma/client'
 import crypto from 'crypto'
 import { z } from 'zod'
 import { Logger } from '../../middleware/logger'
+import { RealtimeService } from '../../infrastructure/realtime.service'
 
 declare const prisma: PrismaClient
 
@@ -246,6 +247,59 @@ export class OrderService {
     })
 
     console.info(`[ORDER] Created order ${orderNumber} from checkout ${dto.checkoutId}`)
+    
+    // V44: Real-time notification
+    RealtimeService.notifyNewOrder(order)
+
+    // ── GAMIFICATION: Award XP to the buyer ──────────────────────────────
+    if (dto.customerId) {
+      try {
+        const xpEarned = Math.floor(checkout.grandTotal / 1000) // 1 XP per 1,000₮
+        const affiliateCode = (dto as any).affiliateCode
+
+        await prisma.customer.update({
+          where: { id: dto.customerId },
+          data: { xp: { increment: Math.max(xpEarned, 1) } }, // Minimum 1 XP
+        })
+
+        // Recompute level based on new XP
+        const updated = await prisma.customer.findUnique({ where: { id: dto.customerId } })
+        if (updated) {
+          const thresholds = [
+            { level: 'Bronze', min: 0 },
+            { level: 'Silver', min: 1000 },
+            { level: 'Gold',   min: 5000 },
+            { level: 'VIP',    min: 10000 },
+          ]
+          const newLevel = thresholds.findLast((t) => (updated.xp || 0) >= t.min)?.level || 'Bronze'
+          if (newLevel !== updated.level) {
+            await prisma.customer.update({ where: { id: dto.customerId }, data: { level: newLevel } })
+          }
+        }
+
+        // ── AFFILIATE: Give 5% wallet credit to the referrer ──────────────
+        if (affiliateCode) {
+          const referrer = await (prisma as any).customer.findUnique({ where: { affiliateCode } })
+          if (referrer && referrer.id !== dto.customerId) {
+            const reward = Math.round(checkout.grandTotal * 0.05)
+            await (prisma as any).customer.update({
+              where: { id: referrer.id },
+              data: { walletBalance: { increment: reward }, xp: { increment: 50 } },
+            })
+            // Also mark the order with the affiliate info
+            await prisma.order.update({
+              where: { id: orderId },
+              data: { affiliateCode, affiliateReward: reward } as any,
+            })
+            console.info(`[AFFILIATE] Rewarded ${reward}₮ to referrer ${referrer.id} for order ${orderNumber}`)
+          }
+        }
+      } catch (e) {
+        console.warn('[GAMIFICATION] Non-critical error:', e)
+      }
+    }
+    // ── END GAMIFICATION ─────────────────────────────────────────────────
+    
     return order
   }
 

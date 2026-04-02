@@ -1,0 +1,16 @@
+{
+  "name": "WEBSHOP — AI Powered Store",
+  "short_name": "Webshop",
+  "description": "Enterprise E-Commerce Platform with AI insights and Real-Time capabilities.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e293b",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}
