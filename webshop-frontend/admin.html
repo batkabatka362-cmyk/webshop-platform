@@ -736,11 +736,14 @@ async function aiPriceOptimize() {
 
 // V6 AUTH LOGIN
 async function doLogin() {
-  const e=document.getElementById('l-email').value, p=document.getElementById('l-pass').value;
+  const e=document.getElementById('l-email').value.trim();
+  const p=document.getElementById('l-pass').value;
+  if(!e || !p) return showT('И-мэйл болон нууц үгийгээ оруулна уу!');
   try {
     const r = await origFetch(API+'/api/v1/auth/admin/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:e,password:p})});
     const d = await r.json();
-    if(d.success) {
+    // V62 FIX: Validate token is a real string before storing (prevents 'undefined' being saved)
+    if(d.success && typeof d.token === 'string' && d.token.length > 0) {
       localStorage.setItem('ws_admin_token', d.token);
       document.getElementById('login-screen').style.display='none';
       showT('Системд амжилттай нэвтэрлээ!');
@@ -753,7 +756,10 @@ async function doLogin() {
 async function loadLogs() {
   try {
     const r=await window.fetch(API+'/api/v1/admin/logs'); const d=await r.json();
-    document.getElementById('ltbody').innerHTML=d.data.map(l=>`<tr><td style="color:var(--dim);font-size:13px">${new Date(l.createdAt).toLocaleString()}</td><td><span style="font-weight:600;padding:4px 8px;background:var(--smoke);border-radius:4px;font-size:12px">${l.action}</span></td><td>${l.resource}</td><td style="font-size:12px;font-family:monospace">${l.resourceId||'-'} <br><span style="color:var(--dim)">${JSON.stringify(l.details)}</span></td></tr>`).join('');
+    if(!d.success || !Array.isArray(d.data)) return;
+    // V63 FIX: Escape all fields to prevent XSS via malicious log entries
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    document.getElementById('ltbody').innerHTML = d.data.map(l => `<tr><td style="color:var(--dim);font-size:13px">${new Date(l.createdAt).toLocaleString()}</td><td><span style="font-weight:600;padding:4px 8px;background:var(--smoke);border-radius:4px;font-size:12px">${esc(l.action)}</span></td><td>${esc(l.resource)}</td><td style="font-size:12px;font-family:monospace">${esc(l.resourceId||'-')} <br><span style="color:var(--dim)">${esc(JSON.stringify(l.details))}</span></td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--dim);padding:40px">Лог алга байна</td></tr>';
   } catch{}
 }
 
@@ -871,11 +877,16 @@ async function submitAiCorrection() {
 
 function openKbM() { document.getElementById('kb-n').value=''; document.getElementById('kb-c').value=''; document.getElementById('mo-kb').classList.add('on'); }
 async function saveKb() {
-  const t=document.getElementById('kb-n').value, c=document.getElementById('kb-c').value;
+  const t=document.getElementById('kb-n').value.trim(), c=document.getElementById('kb-c').value.trim();
   if(!t || !c) return showT('Дутуу байна!');
   document.getElementById('mo-kb').classList.remove('on');
-  const r=await window.fetch(API+'/api/v1/admin/ai/knowledge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:t,content:c})});
-  const d=await r.json(); if(d.success) { showT('Хадгалагдлаа'); loadKb(); }
+  // V66 FIX: Handle server errors explicitly instead of silently failing
+  try {
+    const r=await window.fetch(API+'/api/v1/admin/ai/knowledge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:t,content:c})});
+    const d=await r.json();
+    if(d.success) { showT('Хадгалагдлаа'); loadKb(); }
+    else showT('Хадгалахд алдаа гарлаа: ' + (d.message || 'Тодорхойгүй'));
+  } catch { showT('Сүлжээний алдаа'); }
 }
 async function delKb(id) {
   if(!confirm('Устгах уу?')) return;
@@ -887,16 +898,18 @@ async function delKb(id) {
 async function loadProds() {
   try {
     const r=await fetch(API+'/api/v1/products?limit=100'); const d=await r.json();
-    if(d.success) {
+    if(d.success && Array.isArray(d.data.items)) {
       ALL_PRODS = d.data.items;
-      const totalValuation = ALL_PRODS.reduce((sum, p) => sum + ((p.attributes?.costPrice || p.basePrice) * 50), 0); // Mocking 50 units avg stock per item
+      // V64 FIX: Escape product names to prevent XSS via DB-stored malicious product names
+      const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+      const totalValuation = ALL_PRODS.reduce((sum, p) => sum + ((p.attributes?.costPrice || p.basePrice) * 50), 0);
       document.getElementById('p-valuation').innerHTML = `📦 Агуулахын нийт хөрөнгө: <span style="color:#16a34a;font-size:18px">₮${totalValuation.toLocaleString()}</span>`;
-      document.getElementById('tbody').innerHTML = ALL_PRODS.map(p=>{
+      document.getElementById('tbody').innerHTML = ALL_PRODS.map(p => {
         const cb = p.basePrice || 0; const cc = p.attributes?.costPrice || 0; const mrgn = (cb && cc) ? Math.round(((cb - cc) / cb) * 100) : 0;
         const prcHtml = `₮${cb.toLocaleString()}<br><span style="color:${mrgn>0?'#16a34a':mrgn<0?'#ef4444':'var(--dim)'};font-size:12px;font-family:sans-serif">Ашиг: ${mrgn}% (₮${(cb-cc).toLocaleString()})</span>`;
-        return `<tr><td><input type="checkbox" class="chk-prod" value="${p.id}"></td><td><img src="${p.media?.[0]?.url||'https://via.placeholder.com/44'}" class="p-img"></td><td style="font-weight:600">${p.name}</td><td>${p.category?.name||'Eрөнхий'}</td><td style="font-family:monospace">${prcHtml}</td><td><button class="btn-ghost" onclick="openVarM('${p.id}')">🛒 Хувилбар</button> <button class="btn-ghost" onclick="editP('${p.id}')" style="margin-left:8px">Засах</button> <button class="btn-ghost del-btn" onclick="delP('${p.id}')">Устгах</button></td></tr>`;
+        return `<tr><td><input type="checkbox" class="chk-prod" value="${esc(p.id)}"></td><td><img src="${esc(p.media?.[0]?.url||'https://via.placeholder.com/44')}" class="p-img"></td><td style="font-weight:600">${esc(p.name)}</td><td>${esc(p.category?.name||'Ерөнхий')}</td><td style="font-family:monospace">${prcHtml}</td><td><button class="btn-ghost" onclick="openVarM('${esc(p.id)}')">🛒 Хувилбар</button> <button class="btn-ghost" onclick="editP('${esc(p.id)}')" style="margin-left:8px">Засах</button> <button class="btn-ghost del-btn" onclick="delP('${esc(p.id)}')">Устгах</button></td></tr>`;
       }).join('');
-      document.getElementById('mo-prod').innerHTML = ALL_PRODS.map(p=>`<option value="${p.id}" data-price="${p.basePrice}">${p.name} (₮${p.basePrice})</option>`).join('');
+      document.getElementById('mo-prod').innerHTML = ALL_PRODS.map(p=>`<option value="${esc(p.id)}" data-price="${p.basePrice}">${esc(p.name)} (₮${p.basePrice})</option>`).join('');
     }
   } catch{}
 }
@@ -986,7 +999,9 @@ async function executeAiCommand() {
   const prompt = inp.value.trim();
   if(!prompt) return;
   const memBox = document.getElementById('ai-memory-list');
-  memBox.innerHTML += `<div style="color:#fff;margin-top:12px">&gt; EXEC: ${prompt}</div>`;
+  // V65 FIX: Escape user prompt before injecting into innerHTML to prevent self-XSS
+  const escP = prompt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  memBox.innerHTML += `<div style="color:#fff;margin-top:12px">&gt; EXEC: ${escP}</div>`;
   memBox.scrollTop = memBox.scrollHeight;
   inp.value = '';
   inp.disabled = true;
@@ -995,7 +1010,8 @@ async function executeAiCommand() {
     const r = await fetch(API+'/api/v1/ai/agents/command', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
     const d = await r.json();
     if(document.getElementById('ai-cmd-loading')) document.getElementById('ai-cmd-loading').remove();
-    memBox.innerHTML += `<div style="color:${d.success ? '#22c55e' : '#ef4444'};margin-bottom:12px">[RESPONSE]: ${d.message}</div>`;
+    const escResp = String(d.message||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    memBox.innerHTML += `<div style="color:${d.success ? '#22c55e' : '#ef4444'};margin-bottom:12px">[RESPONSE]: ${escResp}</div>`;
     memBox.scrollTop = memBox.scrollHeight;
   } catch {
     if(document.getElementById('ai-cmd-loading')) document.getElementById('ai-cmd-loading').remove();
