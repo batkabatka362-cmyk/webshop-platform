@@ -672,14 +672,46 @@ let editingId = null;
 let editingTrackId = null;
 let activeVariantProductId = null;
 
-// V6 FETCH INTERCEPTOR
+// V6 FETCH INTERCEPTOR & V51 CORE LOGIC FIX
 const origFetch = window.fetch.bind(window);
+const pendingRequests = new Set(); // Global UI Race Condition Lock
+
 window.fetch = async function(url, config) {
   if(!config) config = {};
   if(!config.headers) config.headers = {};
+  
+  const method = (config.method || 'GET').toUpperCase();
+  const requestKey = method + ':' + url;
+  
+  // 1. Prevent duplicate mutating requests (Global Double-Click Protection)
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+    if (pendingRequests.has(requestKey)) {
+      console.warn('[FRONTEND GUARD] Prevented duplicate request:', requestKey);
+      return new Promise(() => {}); // Pending indefinitely to stop UI execution
+    }
+    pendingRequests.add(requestKey);
+  }
+
   const t = localStorage.getItem('ws_admin_token');
   if(t) config.headers['Authorization'] = `Bearer ${t}`;
-  return origFetch(url, config);
+  
+  try {
+    const response = await origFetch(url, config);
+    
+    // 2. Fundamental Security: Handle 401 Unauthorized globally
+    if (response.status === 401 && !url.includes('/login')) {
+      localStorage.removeItem('ws_admin_token');
+      document.getElementById('login-screen').style.display='flex';
+      showT('Аюулгүй байдал: Сервертэй холбогдох эрхгүй эсвэл хугацаа дууссан байна. Дахин нэвтэрнэ үү.');
+      throw new Error('Unauthorized');
+    }
+    
+    return response;
+  } finally {
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+      pendingRequests.delete(requestKey);
+    }
+  }
 };
 
 async function aiSeoOptimize() {
@@ -1009,8 +1041,13 @@ let ALL_ORDERS = [];
 async function loadOrders() {
   try {
     const r=await fetch(API+'/api/v1/orders'); const d=await r.json(); const tb = document.getElementById('otbody');
-    if(d.success && d.data.length) {
-      tb.innerHTML = ALL_ORDERS.map(o=>`<tr><td style="color:var(--dim);font-size:13px">${new Date(o.createdAt).toLocaleString()}</td><td style="font-weight:500">${o.shippingAddress?.name || 'Систем зочин'}${o.fraudScore>0?' <br><span style="color:#ef4444;font-size:11px;font-weight:bold">[⚠️ Сэжигтэй]</span>':''}</td><td style="font-size:13px;max-width:160px;text-overflow:ellipsis;white-space:nowrap;overflow:hidden">${o.items?.[0]?.productName || 'Бараа'}</td><td style="font-weight:600;font-family:monospace">₮${(o.grandTotal||o.subtotal||0).toLocaleString()} <br><span style="font-size:10px;color:${o.fraudScore>0?'#ef4444':'var(--dim)'}">Оноо: ${o.fraudScore||0} ${o.fraudReason ? '('+o.fraudReason+')' : ''}</span></td><td><div style="background:${o.status==='DELIVERED'?'#dcfce7':o.status==='CANCELLED'?'#fee2e2':'#fef3c7'};color:${o.status==='DELIVERED'?'#166534':o.status==='CANCELLED'?'#991b1b':'#d97706'};padding:4px 8px;border-radius:4px;font-size:12px;font-weight:600;display:inline-block;margin-bottom:4px">${o.status}</div><div style="font-size:11px;color:var(--dim);white-space:nowrap">${o.trackingNumber?('Трак: '+o.trackingNumber):'Кодгүй'}</div><br><span style="font-size:10px;color:${o.paymentStatus==='partially_refunded'?'#ef4444':'#16a34a'}">Төлбөр: ${o.paymentStatus}</span></td><td><button class="btn-ghost" onclick="printInvoice('${o.id}')">🖨️ Хэвлэх</button> <button class="btn-ghost" onclick="openTrackM('${o.id}', '${o.status}', '${o.trackingNumber||''}')" style="background:var(--smoke);color:var(--bone)">Төлөв</button> <button class="btn-ghost del-btn" onclick="refundOrder('${o.id}')">Буцаалт (Refund)</button></td></tr>`).join('');
+    // V52 FIX: Populate ALL_ORDERS BEFORE rendering (was rendering from stale empty cache)
+    if(d.success && Array.isArray(d.data)) {
+      ALL_ORDERS = d.data;
+    }
+    if(ALL_ORDERS.length) {
+      const esc = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      tb.innerHTML = ALL_ORDERS.map(o=>`<tr><td style="color:var(--dim);font-size:13px">${new Date(o.createdAt).toLocaleString()}</td><td style="font-weight:500">${esc(o.shippingAddress?.name || 'Систем зочин')}${o.fraudScore>0?' <br><span style="color:#ef4444;font-size:11px;font-weight:bold">[⚠️ Сэжигтэй]</span>':''}</td><td style="font-size:13px;max-width:160px;text-overflow:ellipsis;white-space:nowrap;overflow:hidden">${esc(o.items?.[0]?.productName || 'Бараа')}</td><td style="font-weight:600;font-family:monospace">₮${(o.grandTotal||o.subtotal||0).toLocaleString()} <br><span style="font-size:10px;color:${o.fraudScore>0?'#ef4444':'var(--dim)'}">Оноо: ${o.fraudScore||0}</span></td><td><div style="background:${o.status==='DELIVERED'?'#dcfce7':o.status==='CANCELLED'?'#fee2e2':'#fef3c7'};color:${o.status==='DELIVERED'?'#166534':o.status==='CANCELLED'?'#991b1b':'#d97706'};padding:4px 8px;border-radius:4px;font-size:12px;font-weight:600;display:inline-block;margin-bottom:4px">${esc(o.status)}</div><div style="font-size:11px;color:var(--dim);white-space:nowrap">${o.trackingNumber?('Трак: '+esc(o.trackingNumber)):'Кодгүй'}</div><br><span style="font-size:10px;color:${o.paymentStatus==='partially_refunded'?'#ef4444':'#16a34a'}">Төлбөр: ${esc(o.paymentStatus)}</span></td><td><button class="btn-ghost" onclick="printInvoice('${esc(o.id)}')">🖨️ Хэвлэх</button> <button class="btn-ghost" onclick="openTrackM('${esc(o.id)}', '${esc(o.status)}', '${esc(o.trackingNumber||'')}')" style="background:var(--smoke);color:var(--bone)">Төлөв</button> <button class="btn-ghost del-btn" onclick="refundOrder('${esc(o.id)}')">Буцаалт (Refund)</button></td></tr>`).join('');
     } else tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--dim);padding:40px">Захиалга хоосон байна.</td></tr>';
   } catch{}
 }
@@ -1034,11 +1071,16 @@ function printInvoice(id) {
 }
 async function refundOrder(id) {
   const amt = prompt('Буцаалт хийх үнийн дүн (₮):');
-  if(!amt) return;
+  if(!amt || isNaN(Number(amt)) || Number(amt) <= 0) return showT('Буруу дүн оруулсан байна.');
   const reason = prompt('Буцаалтын шалтгаан:');
-  await fetch(API+'/api/v1/orders/'+id+'/refund', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:Number(amt), reason:reason||''})});
-  showT('Хэсэгчилсэн буцаалт амжилттай бүртгэгдлээ!');
-  loadOrders();
+  if(reason === null) return; // User cancelled
+  // V53 FIX: Handle refund errors explicitly instead of silently failing
+  try {
+    const r = await fetch(API+'/api/v1/orders/'+id+'/refund', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:Number(amt), reason:reason||''})});
+    const d = await r.json();
+    if(d.success) { showT('Хэсэгчилсэн буцаалт амжилттай бүртгэгдлээ!'); loadOrders(); }
+    else showT('Буцаалт амжилтгүй: ' + (d.error?.message || 'Алдаа гарлаа'));
+  } catch { showT('Сүлжээний алдаа. Буцаалт бүртгэгдсэн эсэхийг шалгаарай.'); }
 }
 async function loadStats(){ try{const r=await fetch(API+'/api/v1/admin/stats');const d=await r.json();if(d.success){document.getElementById('st-rev').textContent='₮'+(d.data.revenue||0).toLocaleString();document.getElementById('st-ord').textContent=d.data.orders||0;}}catch{} }
 
@@ -1134,12 +1176,35 @@ async function approveSupplyOrder(id) {
 
 // CUSTOMERS
 let editingCus = null;
-async function loadCus(){ try{const r=await fetch(API+'/api/v1/customers');const d=await r.json();ALL_CUS=d.data; document.getElementById('ctbody').innerHTML=d.data.map(c=>`<tr><td>${new Date(c.createdAt).toLocaleDateString()}</td><td style="font-weight:600">${c.firstName} ${c.lastName||''}</td><td>${c.email}</td><td><span style="background:${c.segment.includes('VIP')?'#fef08a':'#e4e4e7'};color:${c.segment.includes('VIP')?'#854d0e':'#3f3f46'};padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600">${c.segment}</span><br><span style="font-size:11px;color:var(--dim)">₮${(c.ltv||0).toLocaleString()} (Үлдэгдэл: <b style="color:#eab308">₮${(c.wallet||0).toLocaleString()}</b>)</span></td><td><button class="btn-ghost" onclick="editCus('${c.id}')" style="background:var(--smoke);color:var(--bone)">Хавтас (CRM)</button></td></tr>`).join('')}catch{}}
+async function loadCus(){
+  try{
+    const r=await fetch(API+'/api/v1/customers'); const d=await r.json();
+    // V54 FIX: Guard against non-array data and missing segment field crashing render
+    if(!d.success || !Array.isArray(d.data)) return;
+    ALL_CUS = d.data;
+    const esc = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    document.getElementById('ctbody').innerHTML = ALL_CUS.map(c => {
+      const seg = c.segment || 'Хэвийн';
+      return `<tr><td>${new Date(c.createdAt).toLocaleDateString()}</td><td style="font-weight:600">${esc(c.firstName)} ${esc(c.lastName||'')}</td><td>${esc(c.email)}</td><td><span style="background:${seg.includes('VIP')?'#fef08a':'#e4e4e7'};color:${seg.includes('VIP')?'#854d0e':'#3f3f46'};padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600">${esc(seg)}</span><br><span style="font-size:11px;color:var(--dim)">₮${(c.ltv||0).toLocaleString()} (Үлдэгдэл: <b style="color:#eab308">₮${(c.wallet||0).toLocaleString()}</b>)</span></td><td><button class="btn-ghost" onclick="editCus('${esc(c.id)}')" style="background:var(--smoke);color:var(--bone)">Хавтас (CRM)</button></td></tr>`;
+    }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--dim);padding:40px">Хэрэглэгч байхгүй байна.</td></tr>';
+  } catch{}
+}
 function editCus(id) { const c = ALL_CUS.find(x=>x.id===id); if(c) { editingCus=id; document.getElementById('ce-fn').value=c.firstName; document.getElementById('ce-ln').value=c.lastName||''; document.getElementById('ce-em').value=c.email; document.getElementById('mo-cus-edit').classList.add('on'); document.getElementById('ce-note-input').value=''; document.getElementById('ce-wallet-amt').value=''; loadCusNotes(id); } }
 async function saveCus() { const payload = {firstName: document.getElementById('ce-fn').value, lastName: document.getElementById('ce-ln').value, email: document.getElementById('ce-em').value}; await fetch(API+'/api/v1/customers/'+editingCus, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); showT('Мэдээлэл шинэчлэгдлээ!'); loadCus(); }
 async function loadCusNotes(id) { try { const r=await fetch(API+'/api/v1/customers/'+id+'/notes'); const d=await r.json(); document.getElementById('ce-notes-list').innerHTML=d.data.map(n=>`<div style="background:var(--surface);padding:12px;border-radius:6px;border:1px solid var(--smoke)"><div style="font-size:12px;color:var(--bone);line-height:1.4">${n.details?.note||'-'}</div><div style="font-size:10px;color:var(--dim);margin-top:6px;text-align:right">${new Date(n.createdAt).toLocaleString()}</div></div>`).join(''); } catch{} }
 async function saveCusNote() { const v=document.getElementById('ce-note-input').value.trim(); if(!v)return; await fetch(API+'/api/v1/customers/'+editingCus+'/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({note:v})}); document.getElementById('ce-note-input').value=''; loadCusNotes(editingCus); showT('Тэмдэглэл хадгалагдлаа'); }
-async function addWallet() { const w=document.getElementById('ce-wallet-amt').value; if(!w)return; await fetch(API+'/api/v1/customers/'+editingCus+'/wallet',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:w,reason:'Admin Gift'})}); document.getElementById('ce-wallet-amt').value=''; showT('Wallet цэнэглэгдлээ!'); loadCus(); }
+async function addWallet() {
+  const raw = document.getElementById('ce-wallet-amt').value;
+  // V55 FIX: Coerce to Number, reject 0/negative/NaN before sending to server
+  const amount = Number(raw);
+  if(!raw || isNaN(amount) || amount <= 0) return showT('Буруу дүн! Эерэг тоо оруулна уу.');
+  try {
+    const r = await fetch(API+'/api/v1/customers/'+editingCus+'/wallet',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount, reason:'Admin Gift'})});
+    const d = await r.json();
+    if(d.success) { document.getElementById('ce-wallet-amt').value=''; showT('Wallet амжилттай цэнэглэгдлээ! ₮'+amount.toLocaleString()); loadCus(); }
+    else showT('Алдаа: ' + (d.error?.message || 'Тодорхойгүй'));
+  } catch { showT('Сүлжээний алдаа'); }
+}
 
 // COUPONS
 let editingCp = null;
@@ -1241,9 +1306,16 @@ async function generateApiKey() { const n=document.getElementById('ops-api-name'
 async function delApiKey(id) { await window.fetch(API+'/api/v1/admin/ops/api-keys/'+id,{method:'DELETE'}); loadOpsKeys(); }
 
 // Boot checks
-const _adminToken = localStorage.getItem('ws_admin_token') || localStorage.getItem('ws_token');
-if(!_adminToken) { document.getElementById('login-screen').style.display = 'flex'; }
-else { if(!localStorage.getItem('ws_admin_token') && localStorage.getItem('ws_token')) { localStorage.setItem('ws_admin_token', localStorage.getItem('ws_token')); } initApp(); }
+// V56 FIX (SECURITY): NEVER promote a customer storefront token (ws_token) to admin.
+// Previously, a logged-in customer could open admin.html and gain full admin API access
+// because the boot logic silently copied ws_token -> ws_admin_token.
+const _adminToken = localStorage.getItem('ws_admin_token');
+if(!_adminToken) {
+  // Show login. Do NOT fallback to ws_token (customer token) for security.
+  document.getElementById('login-screen').style.display = 'flex';
+} else {
+  initApp();
+}
 </script>
 </body>
 </html>

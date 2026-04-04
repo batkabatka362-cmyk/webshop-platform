@@ -125,10 +125,23 @@ export class CouponService {
    * Increment usage count after successful order.
    */
   async incrementUsage(code: string): Promise<void> {
-    await prisma.coupon.update({
-      where: { code: code.toUpperCase() },
-      data:  { usageCount: { increment: 1 } },
-    })
+    const coupon = await prisma.coupon.findUnique({ where: { code: code.toUpperCase() } })
+    if (!coupon) return
+
+    if (coupon.usageLimit > 0) {
+      const result = await prisma.coupon.updateMany({
+        where: { id: coupon.id, usageCount: { lt: coupon.usageLimit } },
+        data:  { usageCount: { increment: 1 } },
+      })
+      if (result.count === 0) {
+        throw new Error('Coupon usage limit reached during fulfillment')
+      }
+    } else {
+      await prisma.coupon.update({
+        where: { id: coupon.id },
+        data:  { usageCount: { increment: 1 } },
+      })
+    }
   }
 }
 

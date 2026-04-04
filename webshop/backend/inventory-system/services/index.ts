@@ -28,21 +28,23 @@ export class InventoryService {
   }
 
   async adjustStock(productId: string, change: number, type: string, referenceId?: string, note?: string) {
-    const inv = await prisma.inventory.findUnique({ where: { productId } })
-    if (!inv) throw new Error(`Inventory not found for product ${productId}`)
+    return await prisma.$transaction(async (tx) => {
+      const rows: any[] = await tx.$queryRaw`SELECT * FROM "inventory" WHERE "productId" = ${productId} FOR UPDATE`;
+      if (!rows || rows.length === 0) throw new Error(`Inventory not found for product ${productId}`);
+      
+      const inv = rows[0];
+      const before = inv.quantity;
+      const after  = before + change;
+      if (after < 0 && !inv.allowBackorder) throw new Error('Insufficient stock');
 
-    const before = inv.quantity
-    const after  = before + change
-    if (after < 0 && !inv.allowBackorder) throw new Error('Insufficient stock')
+      const status = after <= 0 ? 'out_of_stock' : after <= inv.lowStockThreshold ? 'low_stock' : 'in_stock';
 
-    const status = after <= 0 ? 'out_of_stock' : after <= inv.lowStockThreshold ? 'low_stock' : 'in_stock'
-
-    await prisma.$transaction([
-      prisma.inventory.update({
+      await tx.inventory.update({
         where: { id: inv.id },
         data:  { quantity: after, status },
-      }),
-      prisma.stockHistory.create({
+      });
+
+      await tx.stockHistory.create({
         data: {
           inventoryId:    inv.id,
           type,
@@ -52,39 +54,31 @@ export class InventoryService {
           referenceType:  type,
           note:           note || `${type}: ${change > 0 ? '+' : ''}${change}`,
         },
-      }),
-    ])
+      });
 
-    Logger.info('INVENTORY', 'stock.adjusted', {
-      productId,
-      type,
-      before,
-      after,
-      change,
-      status,
-      referenceId,
-    })
+      Logger.info('INVENTORY', 'stock.adjusted', { productId, type, before, after, change, status, referenceId });
+      if (status === 'low_stock') {
+        Logger.warn('INVENTORY', 'stock.low', { productId, quantity: after, threshold: inv.lowStockThreshold });
+      }
 
-    if (status === 'low_stock') {
-      Logger.warn('INVENTORY', 'stock.low', { productId, quantity: after, threshold: inv.lowStockThreshold })
-    }
-
-    return { productId, before, after, status }
+      return { productId, before, after, status };
+    });
   }
 
   async softReserve(productId: string, quantity: number, referenceId: string) {
-    const inv = await prisma.inventory.findUnique({ where: { productId } })
-    if (!inv) throw new Error('Inventory not found')
+    return await prisma.$transaction(async (tx) => {
+      const rows: any[] = await tx.$queryRaw`SELECT * FROM "inventory" WHERE "productId" = ${productId} FOR UPDATE`;
+      if (!rows || rows.length === 0) throw new Error('Inventory not found');
 
-    const available = inv.quantity - inv.reserved
-    if (available < quantity && !inv.allowBackorder) {
-      throw new Error(`Insufficient stock: need ${quantity}, available ${available}`)
-    }
+      const inv = rows[0];
+      const available = inv.quantity - inv.reserved;
+      if (available < quantity && !inv.allowBackorder) {
+        throw new Error(`Insufficient stock: need ${quantity}, available ${available}`);
+      }
 
-    const ttl = parseInt(process.env.INVENTORY_SOFT_RESERVE_TTL_SEC || '1800', 10)
+      const ttl = parseInt(process.env.INVENTORY_SOFT_RESERVE_TTL_SEC || '1800', 10);
 
-    const [reservation] = await prisma.$transaction([
-      prisma.stockReservation.create({
+      const reservation = await tx.stockReservation.create({
         data: {
           inventoryId:   inv.id,
           productId,
@@ -95,28 +89,30 @@ export class InventoryService {
           referenceType: 'cart',
           expiresAt:     new Date(Date.now() + ttl * 1000),
         },
-      }),
-      prisma.inventory.update({
+      });
+
+      await tx.inventory.update({
         where: { id: inv.id },
         data:  { reserved: inv.reserved + quantity },
-      }),
-    ])
+      });
 
-    Logger.info('INVENTORY', 'reservation.soft', { productId, quantity, referenceId, expiresAt: new Date(Date.now() + ttl * 1000).toISOString() })
-    return reservation
+      Logger.info('INVENTORY', 'reservation.soft', { productId, quantity, referenceId, expiresAt: new Date(Date.now() + ttl * 1000).toISOString() });
+      return reservation;
+    });
   }
 
   async hardReserve(productId: string, quantity: number, referenceId: string) {
-    const inv = await prisma.inventory.findUnique({ where: { productId } })
-    if (!inv) throw new Error('Inventory not found')
+    return await prisma.$transaction(async (tx) => {
+      const rows: any[] = await tx.$queryRaw`SELECT * FROM "inventory" WHERE "productId" = ${productId} FOR UPDATE`;
+      if (!rows || rows.length === 0) throw new Error('Inventory not found');
 
-    const available = inv.quantity - inv.reserved
-    if (available < quantity) throw new Error('Insufficient stock for hard reservation')
+      const inv = rows[0];
+      const available = inv.quantity - inv.reserved;
+      if (available < quantity) throw new Error('Insufficient stock for hard reservation');
 
-    const ttl = parseInt(process.env.INVENTORY_HARD_RESERVE_TTL_SEC || '900', 10)
+      const ttl = parseInt(process.env.INVENTORY_HARD_RESERVE_TTL_SEC || '900', 10);
 
-    const [reservation] = await prisma.$transaction([
-      prisma.stockReservation.create({
+      const reservation = await tx.stockReservation.create({
         data: {
           inventoryId:   inv.id,
           productId,
@@ -127,15 +123,16 @@ export class InventoryService {
           referenceType: 'checkout',
           expiresAt:     new Date(Date.now() + ttl * 1000),
         },
-      }),
-      prisma.inventory.update({
+      });
+
+      await tx.inventory.update({
         where: { id: inv.id },
         data:  { reserved: inv.reserved + quantity },
-      }),
-    ])
+      });
 
-    Logger.info('INVENTORY', 'reservation.hard', { productId, quantity, referenceId })
-    return reservation
+      Logger.info('INVENTORY', 'reservation.hard', { productId, quantity, referenceId });
+      return reservation;
+    });
   }
 
   async releaseReservation(referenceId: string) {
@@ -144,13 +141,18 @@ export class InventoryService {
     })
 
     for (const r of reservations) {
-      await prisma.$transaction([
-        prisma.stockReservation.update({ where: { id: r.id }, data: { status: 'released' } }),
-        prisma.inventory.update({
-          where: { id: r.inventoryId },
-          data:  { reserved: { decrement: r.quantity } },
-        }),
-      ])
+      await prisma.$transaction(async (tx) => {
+        const updateRes = await tx.stockReservation.updateMany({
+          where: { id: r.id, status: 'active' },
+          data: { status: 'released' }
+        })
+        if (updateRes.count > 0) {
+          await tx.inventory.update({
+            where: { id: r.inventoryId },
+            data:  { reserved: { decrement: r.quantity } },
+          })
+        }
+      })
     }
 
     Logger.info('INVENTORY', 'reservation.released', { referenceId, count: reservations.length })
@@ -163,16 +165,21 @@ export class InventoryService {
     })
 
     for (const r of reservations) {
-      await prisma.$transaction([
-        prisma.stockReservation.update({ where: { id: r.id }, data: { status: 'confirmed' } }),
-        prisma.inventory.update({
-          where: { id: r.inventoryId },
-          data: {
-            quantity: { decrement: r.quantity },
-            reserved: { decrement: r.quantity },
-          },
-        }),
-      ])
+      await prisma.$transaction(async (tx) => {
+        const updateRes = await tx.stockReservation.updateMany({
+          where: { id: r.id, status: 'active' },
+          data: { status: 'confirmed' }
+        })
+        if (updateRes.count > 0) {
+          await tx.inventory.update({
+            where: { id: r.inventoryId },
+            data: {
+              quantity: { decrement: r.quantity },
+              reserved: { decrement: r.quantity },
+            },
+          })
+        }
+      })
 
       await this.checkLowStock(r.productId)
     }
@@ -187,13 +194,18 @@ export class InventoryService {
     })
 
     for (const r of expired) {
-      await prisma.$transaction([
-        prisma.stockReservation.update({ where: { id: r.id }, data: { status: 'expired' } }),
-        prisma.inventory.update({
-          where: { id: r.inventoryId },
-          data:  { reserved: { decrement: r.quantity } },
-        }),
-      ])
+      await prisma.$transaction(async (tx) => {
+        const updateRes = await tx.stockReservation.updateMany({
+          where: { id: r.id, status: 'active' },
+          data: { status: 'expired' }
+        })
+        if (updateRes.count > 0) {
+          await tx.inventory.update({
+            where: { id: r.inventoryId },
+            data:  { reserved: { decrement: r.quantity } },
+          })
+        }
+      })
     }
 
     return { cleaned: expired.length }

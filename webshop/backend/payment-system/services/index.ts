@@ -196,15 +196,15 @@ export class PaymentService {
     if (!payment) throw new Error('Payment not found')
     
     // STRICT IDEMPOTENCY GUARD
-    if (payment.status === 'paid') {
+    const result = await prisma.payment.updateMany({
+      where: { id: paymentId, status: 'pending' },
+      data:  { status: 'paid', paidAt: new Date(), gatewayRef: gatewayPaymentId || undefined },
+    })
+
+    if (result.count === 0) {
       Logger.warn('PAYMENT', 'markPaid.duplicate.blocked', { paymentId, orderId: payment.orderId })
       return
     }
-
-    await prisma.payment.update({
-      where: { id: paymentId },
-      data:  { status: 'paid', paidAt: new Date(), gatewayRef: gatewayPaymentId || undefined },
-    })
     await prisma.paymentTransaction.create({
       data: {
         paymentId,
@@ -246,7 +246,19 @@ export class PaymentService {
            try {
              const { InventoryService } = await import('../../inventory-system/services')
              const invSvc = new InventoryService()
-             await invSvc.confirmReservation(checkoutId)
+             try {
+               await invSvc.confirmReservation(checkoutId)
+             } catch (confErr: any) {
+               // V47 FIX: If reservation expired (late payment), we must deduct manually!
+               Logger.warn('PAYMENT', 'webhook.inventory.confirm.fallback', { paymentId, checkoutId, msg: confErr.message })
+               if (o && o.items) {
+                 for (const item of o.items) {
+                   await invSvc.adjustStock(item.productId, -item.quantity, 'fulfillment', payment.orderId || checkoutId, 'Late payment fallback deduction').catch(err => {
+                     Logger.error('PAYMENT', 'webhook.inventory.fallback.failed', { productId: item.productId, error: err.message })
+                   })
+                 }
+               }
+             }
            } catch (e) {
               Logger.error('PAYMENT', 'webhook.inventory.confirm.failed', { paymentId, checkoutId }, e)
            }

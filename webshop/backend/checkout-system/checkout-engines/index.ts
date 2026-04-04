@@ -97,7 +97,9 @@ export class CheckoutValidationEngine {
     const issues: { productName: string; requested: number; available: number }[] = []
 
     for (const item of items) {
-      const invRecord = await prisma.inventory.findFirst({ where: { productId: item.variantId ?? item.productId } })
+      // V46 FIX: Query inventory by productId. Inventory is tracked per product, not per variant.
+      // Querying by variantId caused a "Phantom Inventory Bug" where variants always showed 0 stock.
+      const invRecord = await prisma.inventory.findFirst({ where: { productId: item.productId } })
       const stock = invRecord
         ? { available: Math.max(0, invRecord.quantity - invRecord.reserved), allowBackorder: invRecord.allowBackorder }
         : { available: 0, allowBackorder: false } // [V27 FIX]: Assume 0 stock if no inventory record exists (Phantom Inventory Bug)

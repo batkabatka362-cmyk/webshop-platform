@@ -125,41 +125,46 @@ dashboardRouter.post('/ai/predict-inventory', handle(async (req, res) => {
   const thirtyDaysAgo = new Date()
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-  // 1. Get all active products with their current inventory
+  // 1. Get all active products with inventory
   const products = await prisma.product.findMany({
     where: { status: 'active', deletedAt: null },
     include: { inventory: true },
   })
+
+  // V50 FIX: Eliminate N+1 Database Query Problem
+  // Compute all sales volumes in a single RAW SQL query instead of iterating per product
+  const salesSql = await prisma.$queryRaw<any[]>`
+    SELECT oi."productId", SUM(oi.quantity) as total_sold
+    FROM "order_item" oi
+    JOIN "order" o ON o.id = oi."orderId"
+    WHERE o."paymentStatus" = 'paid'
+    AND o."createdAt" >= ${thirtyDaysAgo}
+    GROUP BY oi."productId"
+  `
+  const salesMap: Record<string, number> = {}
+  salesSql.forEach(s => { salesMap[s.productId] = Number(s.total_sold) || 0 })
+
+  // Also fetch all DRAFTs in ONE query
+  const existingDraftsList = await prisma.supplyOrder.findMany({
+    where: { status: 'DRAFT' },
+    select: { productId: true }
+  })
+  const existingDraftsMap = new Set(existingDraftsList.map((d: any) => d.productId))
 
   const generatedDRAFTS = []
 
   for (const p of products) {
     if (!p.inventory) continue
 
-    // 2. Calculate 30-day Sales Velocity atomically
-    const sales = await prisma.orderItem.aggregate({
-      where: {
-        productId: p.id,
-        order: {
-          paymentStatus: 'paid',
-          createdAt: { gte: thirtyDaysAgo }
-        }
-      },
-      _sum: { quantity: true }
-    })
-
-    const sold30d = sales._sum.quantity || 0
+    // 2. Access atomic sales map O(1)
+    const sold30d = salesMap[p.id] || 0
     const dailyVelocity = sold30d / 30
 
     // 3. Threshold check: Less than 14 days of stock remaining?
     if (dailyVelocity > 0 && p.inventory.quantity < (dailyVelocity * 14)) {
       
-      // 4. Concurrency Safety: Is there already a DRAFT order pending?
-      const existingDraft = await prisma.supplyOrder.findFirst({
-        where: { productId: p.id, status: 'DRAFT' }
-      })
-
-      if (!existingDraft) {
+      // 4. Concurrency Safety Object Map O(1)
+      if (!existingDraftsMap.has(p.id)) {
         // 5. LLM Prediction (Fallbacks safely if offline)
         let suggestedQty = Math.ceil(dailyVelocity * 30) // Fallback default
         let reason = `System detected high velocity: ${sold30d} sold last month. Stock will deplete in <14 days.`
@@ -218,21 +223,36 @@ dashboardRouter.get('/supply-orders', handle(async (req, res) => {
 }))
 
 dashboardRouter.post('/supply-orders/:id/approve', handle(async (req, res) => {
+  // V49 FIX (BUG-39): Atomic state claim to prevent double-restock if two admins approve at the same time
+  const claimResult = await prisma.supplyOrder.updateMany({
+    where: { id: req.params.id, status: 'DRAFT' },
+    data: { status: 'PROCESSING' }
+  })
+  if (claimResult.count === 0) {
+    throw Object.assign(new Error('Order is already approved or invalid'), { statusCode: 400 })
+  }
+
   const order = await prisma.supplyOrder.findUnique({ where: { id: req.params.id } })
-  if (!order || order.status !== 'DRAFT') throw Object.assign(new Error('Invalid order'), { statusCode: 400 })
+  if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404 })
 
-  // Use InventoryService for safe stock update — validates thresholds, logs history, and updates status
-  const { InventoryService } = await import('../../inventory-system/services')
-  const invSvc = new InventoryService()
-  await invSvc.adjustStock(
-    order.productId,
-    order.quantity,
-    'supply_approved',
-    order.id,
-    `Supply order #${order.id} approved by admin ${(req as any).admin.id}`
-  )
+  try {
+    // Use InventoryService for safe stock update — validates thresholds, logs history, and updates status
+    const { InventoryService } = await import('../../inventory-system/services')
+    const invSvc = new InventoryService()
+    await invSvc.adjustStock(
+      order.productId,
+      order.quantity,
+      'supply_approved',
+      order.id,
+      `Supply order #${order.id} approved by admin ${(req as any).admin.id}`
+    )
+  } catch (err) {
+    // Revert if inventory adjustment fails
+    await prisma.supplyOrder.update({ where: { id: order.id }, data: { status: 'DRAFT' } })
+    throw err
+  }
 
-  // Commit supply order status in a separate atomic transaction
+  // Commit supply order status
   const [approvedOrder] = await prisma.$transaction([
     prisma.supplyOrder.update({ where: { id: order.id }, data: { status: 'COMPLETED' } }),
     prisma.adminActivity.create({

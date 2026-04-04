@@ -183,10 +183,20 @@ export class CustomerAuthService {
   }
 
   async spendWallet(customerId: string, amount: number) {
-    const customer = await prisma.customer.findUnique({ where: { id: customerId } })
-    if (!customer) throw Object.assign(new Error('Customer not found'), { statusCode: 404 })
-    if ((customer.walletBalance || 0) < amount) throw Object.assign(new Error('Insufficient wallet balance'), { statusCode: 400 })
-    return prisma.customer.update({ where: { id: customerId }, data: { walletBalance: { decrement: amount } } })
+    if (amount <= 0) throw Object.assign(new Error('Invalid amount'), { statusCode: 400 })
+    
+    // V48 FIX (BUG-38): Atomic check-and-decrement to prevent negative wallet balance
+    // due to concurrent requests (Race Condition)
+    const result = await prisma.customer.updateMany({ 
+      where: { id: customerId, walletBalance: { gte: amount } }, 
+      data: { walletBalance: { decrement: amount } } 
+    })
+    
+    if (result.count === 0) {
+      throw Object.assign(new Error('Insufficient wallet balance or customer not found'), { statusCode: 400 })
+    }
+    
+    return prisma.customer.findUnique({ where: { id: customerId } })
   }
 
   async updateProfile(customerId: string, data: z.infer<typeof UpdateProfileSchema>) {

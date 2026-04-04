@@ -1068,7 +1068,19 @@ const DEMO=[
 const FEAT=[{id:'f1',name:'Samsung Galaxy S24 Ultra',cat:'Утас',price:2500000,img:'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=400&q=80'},{id:'f2',name:'MacBook Air M3',cat:'Компьютер',price:4200000,img:'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&q=80'},{id:'f3',name:'Sony WH-1000XM5',cat:'Дуут',price:850000,img:'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=400&q=80'}];
 const ALL=[...DEMO,...FEAT];
 const liked=new Set();
-let cart = JSON.parse(localStorage.getItem('ws_cart') || '[]');
+// V57 FIX: Crash-safe cart parse — corrupted localStorage no longer kills the page
+function safeParseCart() {
+  try {
+    const raw = localStorage.getItem('ws_cart');
+    const parsed = JSON.parse(raw || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    console.warn('[CART] localStorage corrupted, resetting cart.');
+    localStorage.removeItem('ws_cart');
+    return [];
+  }
+}
+let cart = safeParseCart();
 let curPage = 1;
 let totalPages = 1;
 
@@ -1164,7 +1176,9 @@ async function loadProds(){
     const d=await r.json();
     if(d.success&&d.data.items.length){
       const fetched = d.data.items.map((p,i)=>({id:p.id,name:p.name,cat:p.category?.name||'Ерөнхий',price:p.basePrice||0,img:p.media?.[0]?.url||P_IMGS[i%P_IMGS.length],badge:i===0?'new':i===1?'hot':null}));
-      ALL.push(...fetched);
+      // V58 FIX: Deduplicate ALL to prevent search returning stale duplicates on re-render
+      const existingIds = new Set(ALL.map(p => p.id));
+      fetched.forEach(p => { if(!existingIds.has(p.id)) { ALL.push(p); existingIds.add(p.id); } });
       renderProds(fetched);
       totalPages = d.data.totalPages || 1;
       if(totalPages > 1) document.getElementById('load-more-btn').style.display='inline-block';
@@ -1178,20 +1192,22 @@ async function loadProds(){
 function renderProds(list){
   const g=document.getElementById('pg');
   if(!list.length){g.innerHTML='<p style="color:var(--dim);padding:60px;grid-column:span 4;font-weight:300">Бараа олдсонгүй</p>';return;}
+  // V59 FIX: Escape product names to prevent XSS injection via maliciously named products
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   const bl={new:'Шинэ',hot:'Хит',sale:'Хямдрал'},bc={new:'bn',hot:'bh',sale:'bs'};
   g.innerHTML=list.map((p,i)=>`
-    <div class="pc" style="transition-delay:${i*.07}s" onclick="openQv('${p.id}')">
+    <div class="pc" style="transition-delay:${i*.07}s" onclick="openQv('${esc(p.id)}')">
       ${p.badge?`<div class="pbadge ${bc[p.badge]||'bn'}">${bl[p.badge]||''}</div>`:''}
       <div class="pimg">
-        <img src="${p.img||P_IMGS[i%P_IMGS.length]}" style="width:100%;height:100%;object-fit:cover;aspect-ratio:3/4">
-        <div class="pov"><button class="pov-btn" onclick="event.stopPropagation();aId('${p.id}')">Сагсанд нэмэх</button></div>
+        <img src="${esc(p.img||P_IMGS[i%P_IMGS.length])}" style="width:100%;height:100%;object-fit:cover;aspect-ratio:3/4">
+        <div class="pov"><button class="pov-btn" onclick="event.stopPropagation();aId('${esc(p.id)}')">Сагсанд нэмэх</button></div>
       </div>
       <div class="pi">
-        <div class="pcat">${p.cat}</div>
-        <div class="pname">${p.name}</div>
+        <div class="pcat">${esc(p.cat)}</div>
+        <div class="pname">${esc(p.name)}</div>
         <div class="pbottom">
           <div><span class="pprice">₮${p.price.toLocaleString()}</span>${p.old?`<span class="pold">₮${p.old.toLocaleString()}</span>`:''}</div>
-          <button class="plike${liked.has(p.id)?' lk':''}" onclick="event.stopPropagation();tLike('${p.id}',this)">♥</button>
+          <button class="plike${liked.has(p.id)?' lk':''}" onclick="event.stopPropagation();tLike('${esc(p.id)}',this)">♥</button>
         </div>
       </div>
     </div>
@@ -1295,8 +1311,8 @@ async function submitCheckout() {
     const r=await fetch(API+'/api/v1/storefront/checkout', { method:'POST', headers:apiHeaders(), body:JSON.stringify(pb) });
     const d=await r.json();
     if(d.success) {
-      currentOrderId = d.orderId;
-      document.getElementById('qsub').textContent = 'Нийт төлөх дүн: ₮'+d.grandTotal.toLocaleString();
+      currentOrderId = d.checkoutId || d.orderId;
+      document.getElementById('qsub').textContent = 'Нийт төлөх дүн: ₮'+d.grandTotal?.toLocaleString();
       document.getElementById('mo-checkout').classList.remove('on');
       cart = []; saveCart(); updCart();
       document.getElementById('qbg').classList.add('on');
@@ -1334,9 +1350,16 @@ async function doAuth(){
   try{
     const r=await fetch(API+'/api/v1/storefront/auth/'+authMode,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const d=await r.json();
-    if(d.success){ authToken=d.token; localStorage.setItem('ws_customer_token',authToken); document.getElementById('cw-row').style.display='flex'; loadMe(); }
-    else showT(d.message);
-  }catch{}
+    // V60 FIX: Only store token if it's a valid non-empty string — prevents 'undefined' being stored as a string
+    if(d.success && typeof d.token === 'string' && d.token.length > 0){
+      authToken = d.token;
+      localStorage.setItem('ws_customer_token', authToken);
+      document.getElementById('cw-row').style.display='flex';
+      loadMe();
+    } else {
+      showT(d.message || 'Нэвтрэх амжилтгүй болсон');
+    }
+  }catch{ showT('Сервертэй холбогдох боломжгүй байна'); }
 }
 function logOut(){ authToken=''; localStorage.removeItem('ws_customer_token'); document.getElementById('cw-row').style.display='none'; document.getElementById('auth-logged').style.display='none'; document.getElementById('auth-unlogged').style.display='block'; }
 async function loadMe(){
@@ -1439,18 +1462,21 @@ function go(id){document.getElementById(id).scrollIntoView({behavior:'smooth'});
 
 
 // ── AI CHAT LOGIC ──
+let aiChatHistory = [];
 function tAi(){ document.getElementById('ai-p').classList.toggle('on'); }
 async function sAi(){
   const i=document.getElementById('aii'); const v=i.value.trim(); if(!v)return;
   const b=document.getElementById('aib');
   i.value='';
   b.innerHTML+=`<div class="ai-msg user">${v}</div>`;
+  aiChatHistory.push({ role: 'user', content: v });
   const tId='tk_'+Date.now();
   b.innerHTML+=`<div class="ai-msg bot" id="${tId}" style="opacity:0.7">Бодож байна... <span class="tdot" style="display:inline-block"></span></div>`;
   b.scrollTop=b.scrollHeight;
   try{
     const reqPayload = { 
       message: v, 
+      history: aiChatHistory.slice(-10),
       context: { 
         url: window.location.href, 
         cart: cart 
@@ -1460,6 +1486,7 @@ async function sAi(){
     const d=await r.json();
     document.getElementById(tId).remove();
     let html = `<div class="ai-msg bot">${d.text||'Холболт салсан байна.'}</div>`;
+    aiChatHistory.push({ role: 'assistant', content: d.text || 'Холболт салсан байна.' });
     if(d.products && d.products.length > 0) {
       const cards = d.products.map(p => `
         <div style="background:var(--smoke2);border:1px solid var(--dim);border-radius:8px;padding:8px;margin-top:8px;display:flex;gap:12px;align-items:center;cursor:pointer" onclick="openQv('${p.id}')">
@@ -1613,9 +1640,12 @@ async function loadFlashSales() {
   }
 }
 
+// V61 FIX: Clear previous interval before creating a new one (prevents timer leak on re-render)
+let flashTimerInterval = null;
 function startFlashTimer() {
   if(!flashEndsAt) return;
-  setInterval(() => {
+  if(flashTimerInterval) clearInterval(flashTimerInterval);
+  flashTimerInterval = setInterval(() => {
     const now = new Date();
     let diff = Math.max(0, flashEndsAt - now) / 1000;
     const h = Math.floor(diff / 3600); diff %= 3600;
@@ -1624,6 +1654,8 @@ function startFlashTimer() {
     document.getElementById('fs-h').textContent = String(h).padStart(2,'0');
     document.getElementById('fs-m').textContent = String(m).padStart(2,'0');
     document.getElementById('fs-s').textContent = String(s).padStart(2,'0');
+    // Auto-clear when sale ends
+    if(diff <= 0) { clearInterval(flashTimerInterval); flashTimerInterval = null; }
   }, 1000);
 }
 

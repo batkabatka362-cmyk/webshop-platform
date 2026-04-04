@@ -32,9 +32,21 @@ export function runSystemRecoveryWorker() {
           const cp = await prisma.checkoutPayment.findFirst({ where: { paymentSessionId: payment.id } });
           if (cp?.checkoutId) {
              const { InventoryService } = await import('../../inventory-system/services');
-             await new InventoryService().confirmReservation(cp.checkoutId).catch((e: any) => {
-               Logger.error('RECOVERY_WORKER', 'inventory.confirm.failed', { checkoutId: cp.checkoutId }, e)
-             });
+             const invSvc = new InventoryService();
+             try {
+               await invSvc.confirmReservation(cp.checkoutId);
+             } catch (confErr: any) {
+               Logger.warn('RECOVERY_WORKER', 'inventory.confirm.fallback', { checkoutId: cp.checkoutId, msg: confErr.message });
+               // Fetch order items to do manual deductive fallback
+               const orderWithItems = await prisma.order.findUnique({ where: { id: order.id }, include: { items: true } });
+               if (orderWithItems && orderWithItems.items) {
+                 for (const item of orderWithItems.items) {
+                   await invSvc.adjustStock(item.productId, -item.quantity, 'fulfillment', order.id, 'Self-healing late deduction fallback').catch(err => {
+                     Logger.error('RECOVERY_WORKER', 'inventory.fallback.failed', { productId: item.productId, error: err.message });
+                   });
+                 }
+               }
+             }
           }
         }
       }

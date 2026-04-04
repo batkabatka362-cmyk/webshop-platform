@@ -328,7 +328,34 @@ export class OrderService {
     if (['shipped', 'delivered', 'completed', 'cancelled'].includes(order.status)) {
       throw new Error(`Cannot cancel order in '${order.status}' status`)
     }
-    return this.repo.updateStatus(orderId, 'cancelled', actorId, 'customer', reason || 'Cancelled by customer')
+    const updated = await this.repo.updateStatus(orderId, 'cancelled', actorId, 'customer', reason || 'Cancelled by customer')
+
+    // V45 FIX (BUG-35): Release or Restock inventory upon order cancellation
+    try {
+      const { InventoryService } = await import('../../inventory-system/services')
+      const invSvc = new InventoryService()
+      
+      if (order.paymentStatus === 'paid') {
+        // Fully deducted, so add it back
+        for (const item of order.items) {
+          await invSvc.adjustStock(item.productId, item.quantity, 'restock', orderId, `Order ${order.orderNumber} cancelled`)
+        }
+      } else {
+        // Only reserved, so release the reservation via checkoutId
+        if (order.paymentId) {
+          const cp = await (prisma as any).checkoutPayment.findFirst({ where: { paymentSessionId: order.paymentId } })
+          if (cp?.checkoutId) {
+            await invSvc.releaseReservation(cp.checkoutId).catch((e: any) => {
+              Logger.warn('ORDER', 'cancel.inventory.release.warn', { checkoutId: cp.checkoutId, error: e.message })
+            })
+          }
+        }
+      }
+    } catch (e) {
+      Logger.error('ORDER', 'cancel.inventory_restore.failed', { orderId }, e)
+    }
+
+    return updated
   }
 
   async getDashboardStats() {

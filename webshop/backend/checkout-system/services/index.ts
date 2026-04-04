@@ -24,7 +24,7 @@ import {
   CheckoutAddressRepository,
   CheckoutPaymentRepository,
 } from '../repositories'
-import { CheckoutError, summaryCache } from '../checkout-storage'
+import { CheckoutError, summaryCache, checkoutLock } from '../checkout-storage'
 import {
   CheckoutSummaryDTO,
   CheckoutResultDTO,
@@ -204,16 +204,17 @@ export class PaymentPreparationService {
     checkoutId:     string,
     idempotencyKey: string
   ): Promise<CheckoutResultDTO> {
-    const session = await checkoutSessionManager.loadSession(checkoutId)
+    return checkoutLock.withLock(checkoutId, async () => {
+      const session = await checkoutSessionManager.loadSession(checkoutId)
 
-    // Guard: all steps must be complete
-    if (!session.customerInfo || !session.shippingAddress ||
-        !session.shippingMethod || !session.paymentGateway) {
-      throw new CheckoutError(
-        'Checkout is incomplete. Please complete all steps.',
-        'CHECKOUT_INCOMPLETE'
-      )
-    }
+      // Guard: all steps must be complete
+      if (!session.customerInfo || !session.shippingAddress ||
+          !session.shippingMethod || !session.paymentGateway) {
+        throw new CheckoutError(
+          'Checkout is incomplete. Please complete all steps.',
+          'CHECKOUT_INCOMPLETE'
+        )
+      }
 
     // Idempotency check
     if (session.status === 'pending_payment' && session.idempotencyKey === idempotencyKey) {
@@ -360,6 +361,7 @@ export class PaymentPreparationService {
       paymentQrCode:   paymentSession.qrCode,
       message:         'Payment initiated successfully. Order generated.',
     }
+   })
   }
 
   /**

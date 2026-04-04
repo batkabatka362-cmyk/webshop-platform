@@ -101,20 +101,51 @@ storefrontRouter.post('/gift-cards', async (req, res) => {
 storefrontRouter.post('/gift-cards/redeem', async (req, res) => {
   try {
     const { code } = req.body;
-    // V43 FIX (BUG-18): Use transaction to prevent double-redeem race condition.
-    // Previously loaded ALL gift card events into memory and filtered in JS.
-    const result = await prisma.$transaction(async (tx: any) => {
-      const events = await tx.systemEvent.findMany({ where: { eventType: 'GIFT_CARD_CREATED' } });
-      const card = events.find((e: any) => e.payload?.code === code && !e.payload?.used);
-      if (!card) return null;
-      await tx.systemEvent.update({
-        where: { id: card.id },
-        data: { payload: { ...(card.payload as any), used: true, usedAt: new Date().toISOString() } }
-      });
-      return { amount: (card.payload as any).amount };
+    
+    // Find the specific gift card event
+    const events = await prisma.$queryRaw<any[]>`
+      SELECT * FROM "system_event" 
+      WHERE "eventType" = 'GIFT_CARD_CREATED' 
+      AND payload->>'code' = ${code}
+    `;
+    const card = events.find(e => {
+        const payload = typeof e.payload === 'string' ? JSON.parse(e.payload) : e.payload;
+        return payload?.code === code && !payload?.used;
     });
-    if (!result) return res.status(404).json({ success: false, message: 'Бэлгийн карт олдсонгүй эсвэл ашиглагдсан' });
-    res.json({ success: true, amount: result.amount });
+
+    if (!card) {
+      return res.status(404).json({ success: false, message: 'Бэлгийн карт олдсонгүй эсвэл ашиглагдсан' });
+    }
+
+    const payloadObj = typeof card.payload === 'string' ? JSON.parse(card.payload) : card.payload;
+    const updatedPayload = { ...payloadObj, used: true, usedAt: new Date().toISOString() };
+
+    // Atomic update: only update if the payload hasn't changed (or by using a raw query check)
+    const result = await prisma.$executeRaw`
+      UPDATE "system_event"
+      SET payload = ${updatedPayload}::jsonb
+      WHERE id = ${card.id}
+      AND (payload->>'used')::boolean IS NOT TRUE;
+    `.catch(() => 0); // Handle differences in DB syntax gracefully if necessary
+
+    if (result === 0) {
+      // Fallback update if raw query is not supported, or it was already used concurrently
+      const tryFallback = await prisma.systemEvent.findUnique({ where: { id: card.id } });
+      const fbPayload: any = tryFallback?.payload || {};
+      if (fbPayload.used) {
+         return res.status(404).json({ success: false, message: 'Бэлгийн карт олдсонгүй эсвэл ашиглагдсан' });
+      }
+      
+      const resFallback = await prisma.systemEvent.updateMany({
+         where: { id: card.id, payload: { equals: card.payload } }, // Basic OCC strategy
+         data: { payload: updatedPayload }
+      });
+      if (resFallback.count === 0) {
+          return res.status(404).json({ success: false, message: 'Бэлгийн карт олдсонгүй эсвэл ашиглагдсан' });
+      }
+    }
+
+    res.json({ success: true, amount: payloadObj.amount });
   } catch(err) { res.status(500).json({ success: false }); }
 });
 
