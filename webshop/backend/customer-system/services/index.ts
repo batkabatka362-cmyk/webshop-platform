@@ -196,7 +196,24 @@ export class CustomerAuthService {
       throw Object.assign(new Error('Insufficient wallet balance or customer not found'), { statusCode: 400 })
     }
     
-    return prisma.customer.findUnique({ where: { id: customerId } })
+    const updated = await prisma.customer.findUnique({ where: { id: customerId } })
+    return this.sanitize(updated)
+  }
+
+  async addWallet(customerId: string, amount: number, reason: string) {
+    if (amount <= 0) throw Object.assign(new Error('Invalid amount'), { statusCode: 400 })
+
+    const updated = await prisma.customer.update({
+      where: { id: customerId },
+      data: { walletBalance: { increment: amount } }
+    })
+    
+    // Log the manual admin credit event
+    await prisma.adminActivity.create({
+      data: { action: 'wallet_topup', resource: 'customer', resourceId: customerId, ipAddress: 'SYSTEM_INTERNAL' }
+    }).catch(e => console.error('Admin log failed', e))
+
+    return this.sanitize(updated)
   }
 
   async updateProfile(customerId: string, data: z.infer<typeof UpdateProfileSchema>) {
@@ -292,7 +309,8 @@ customerRouter.post('/login', handle(async (req, res) => {
 }))
 
 customerRouter.post('/refresh', handle(async (req, res) => {
-  const { refreshToken } = req.body
+  // B92 FIX: Added Zod check for body before passing to refresh service
+  const { refreshToken } = z.object({ refreshToken: z.string().min(1) }).parse(req.body)
   const tokens = await authService.refreshToken(refreshToken)
   res.json({ success: true, data: tokens })
 }))
@@ -320,4 +338,13 @@ customerRouter.post('/wallet/spend', customerAuth, handle(async (req, res) => {
   if (!amount || amount <= 0) throw Object.assign(new Error('Invalid amount'), { statusCode: 400 })
   const updated = await authService.spendWallet((req as any).user.id, amount)
   res.json({ success: true, data: { walletBalance: updated.walletBalance } })
+}))
+
+// Admin route: Give wallet balance to customer
+import { adminAuth } from '../../admin-system/services'
+customerRouter.post('/:id/wallet', adminAuth, handle(async (req, res) => {
+  // B94 FIX: Missing route for admin wallet top-ups (called by admin dash v55)
+  const { amount, reason } = req.body
+  const result = await authService.addWallet(req.params.id, Number(amount), reason || 'Admin Credit')
+  res.json({ success: true, data: { walletBalance: result.walletBalance } })
 }))

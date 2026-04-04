@@ -325,7 +325,9 @@ function handle(fn: (req: Request, res: Response) => Promise<void>) {
 
 export const paymentRouter = Router()
 
-paymentRouter.get('/:id', handle(async (req, res) => {
+import { adminAuth } from '../../admin-system/services'
+
+paymentRouter.get('/:id', adminAuth, handle(async (req, res) => {
   const payment = await paymentService.checkPaymentStatus(req.params.id)
   res.json({ success: true, data: payment })
 }))
@@ -353,9 +355,11 @@ paymentRouter.post('/callback', handle(async (req, res) => {
           Logger.warn('PAYMENT', 'webhook.verification.failed', { paymentId: payment.id, invoiceId, verification })
         }
       } else {
-        // Non-QPay gateways or QPay not configured — mark paid with warning
-        Logger.warn('PAYMENT', 'webhook.unverified.fallback', { paymentId: payment.id, gateway: payment.gateway })
-        await paymentService.markPaid(payment.id)
+        // B91 FIX: Security Hardening. 
+        // Previously marked as 'paid' even if unverified for non-QPay or missing config.
+        // This allowed potential payment spoofing. Now we block unverified transitions.
+        Logger.error('PAYMENT', 'webhook.unverified.blocked', { paymentId: payment.id, gateway: payment.gateway })
+        return res.status(403).json({ success: false, error: { message: 'Gateway verification failed or not configured' } })
       }
     }
   }
@@ -363,8 +367,10 @@ paymentRouter.post('/callback', handle(async (req, res) => {
   res.json({ success: true })
 }))
 
-paymentRouter.post('/:id/refund', handle(async (req, res) => {
+paymentRouter.post('/:id/refund', adminAuth, handle(async (req, res) => {
+  // B90 FIX: Restricted refund to admins only.
   const { amount, reason } = req.body
+  if (!amount || amount <= 0) return res.status(400).json({ success: false, error: { message: 'Invalid refund amount' } })
   const refund = await paymentService.processRefund(req.params.id, amount, reason)
   res.json({ success: true, data: refund })
 }))
