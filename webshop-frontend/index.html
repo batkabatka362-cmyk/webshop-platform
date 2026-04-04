@@ -633,7 +633,7 @@ body { background: var(--void) !important; color: var(--text) !important; font-f
 .fab-bot::after { content: ''; position: absolute; top: 4px; right: 4px; width: 10px; height: 10px; background: #44ff88; border-radius: 50%; border: 2px solid #fff; }
 
 /* Hiding old redundant sections */
-nav#nav, .hero, .sp#featured, .manifesto, .promo3, .nl, footer, .btt, .stats-section, #home_banner, .trust-section, .rv-section { display: none !important; }
+nav#nav, .hero, .sp#featured, .manifesto, .promo3, .nl, footer, .btt, .stats-section, #home_banner, .trust-section, .rv-section, .ftabs, #cats { display: none !important; }
 .pgrid { background: transparent !important; gap: 16px !important; padding: 0 24px; border: none !important; }
 .pc { background: #fff !important; border: 1px solid #eee !important; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.03) !important; padding:0; flex-direction: column; }
 .pph::after { display: none !important; }
@@ -685,8 +685,8 @@ nav#nav, .hero, .sp#featured, .manifesto, .promo3, .nl, footer, .btt, .stats-sec
     <a href="index.html" class="h-logo"><img src="https://ui-avatars.com/api/?name=WS&background=random" style="width:28px;height:28px;border-radius:50%;margin-right:8px;vertical-align:middle;"> WEB<span>SHOP</span></a>
   </div>
   <div class="h-right">
-    <button class="icon-btn" onclick="tC()"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></button>
-    <button class="icon-btn" onclick="document.getElementById('nlinks').classList.toggle('mob-open')"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+    <button class="icon-btn" onclick="tC()" style="position:relative"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span id="ncnt" style="position:absolute;top:-4px;right:-4px;background:#f00;color:#fff;border-radius:50%;font-size:10px;padding:2px 6px;font-weight:bold;line-height:1;">0</span></button>
+    <button class="icon-btn" onclick="tAuth()"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"/><path d="M5.5 21v-2a4 4 0 0 1 4-4h5a4 4 0 0 1 4 4v2"/></svg></button>
   </div>
 </header>
 
@@ -1349,34 +1349,30 @@ async function doNewsletter() {
   } catch { showT('Алдаа гарлаа'); }
 }
 
-// V13: Load categories from API
+// V13+APP: Load categories from API into Horizontal Bubble bar
 async function loadCategories() {
-  const colors = ['#ff3d00','#4488ff','#9c27b0','#44ff88','#d4a843','#00d4ff','#ff6b9d','#4caf50'];
   try {
     const r = await fetch(API+'/api/v1/categories');
     const d = await r.json();
     if(d.success && d.data.length) {
-      document.getElementById('cat-grid').innerHTML = d.data.map((c,i) => `
-        <div class="cc reveal-up" style="transition-delay:${i*.07}s;cursor:pointer" onclick="filterByCat('${c.name}')">
-          <div class="cc-glow" style="background:${colors[i%colors.length]}"></div>
-          <div class="cc-num">${String(i+1).padStart(2,'0')}</div>
-          <div class="cc-txt"><div class="cc-name">${c.name}</div><div class="cc-cnt">${c._count?.products||0} бараа</div></div>
-          <div class="cc-arrow">→</div>
-        </div>
-      `).join('');
-      // Trigger scroll reveal
-      document.querySelectorAll('#cat-grid .cc').forEach(el=>rvObs.observe(el));
-    } else {
-      document.getElementById('cat-grid').innerHTML = '<div style="color:var(--dim);text-align:center;padding:40px;grid-column:span 3">Ангилал байхгүй</div>';
+      const icons = ['✨','🔥','📦','🏷️','💎','🌟','📱','🎧'];
+      const scroll = document.getElementById('hz-cat-scroll');
+      if(scroll) {
+        scroll.innerHTML = '<div class="cat-bubble" onclick="filterByCat(\'all\')"><div class="cat-bubble-icon" style="background:#007bff;color:#fff;border-color:#007bff">🛒</div><div class="cat-bubble-name">Бүгд</div></div>' + 
+          d.data.map((c, i) => `
+          <div class="cat-bubble" onclick="filterByCat('${c.name}')">
+            <div class="cat-bubble-icon">${icons[i%icons.length]}</div>
+            <div class="cat-bubble-name">${c.name}</div>
+          </div>
+        `).join('');
+      }
     }
-  } catch {
-    document.getElementById('cat-grid').innerHTML = '<div style="color:var(--dim);text-align:center;padding:40px;grid-column:span 3">Ангилал уншихад алдаа</div>';
-  }
+  } catch {}
 }
 
 function filterByCat(catName) {
   document.querySelectorAll('.ft').forEach(x=>x.classList.remove('a'));
-  const list = ALL.filter(p=>p.cat===catName);
+  const list = catName === 'all' ? ALL : ALL.filter(p=>p.cat===catName);
   renderProds(list.length ? list : DEMO);
   go('products');
 }
@@ -2373,7 +2369,7 @@ async function sendAiChat(e) {
 <div class="bottom-nav">
   <a href="#" class="bn-item active"><div class="bn-icon">🏠</div><div>Нүүр</div></a>
   <a href="#products" class="bn-item"><div class="bn-icon">📦</div><div>Бараа</div></a>
-  <a href="#cats" class="bn-item"><div class="bn-icon">🗂️</div><div>Ангилал</div></a>
+  <a href="#hz-cats" class="bn-item"><div class="bn-icon">🗂️</div><div>Ангилал</div></a>
   <a href="javascript:doGiftCard()" class="bn-item"><div class="bn-icon">🔧</div><div>Үйлчилгээ</div></a>
   <a href="javascript:tAuth()" class="bn-item"><div class="bn-icon">👤</div><div>Нэвтрэх</div></a>
 </div>
