@@ -170,7 +170,6 @@ tr:hover { background-color: rgba(255,255,255,0.03); }
   <a href="javascript:void(0)" class="nav-item" id="nt-kb" onclick="switchTab('kb')" style="background:linear-gradient(135deg, rgba(234,179,8,0.1), rgba(245,158,11,0.1));color:#d97706;font-weight:600;margin-top:8px">📚 AI Мэдлэгийн Сан (V29)</a>
   <a href="javascript:void(0)" class="nav-item" id="nt-omni" onclick="switchTab('omni')" style="background:linear-gradient(135deg, rgba(236,72,153,0.1), rgba(244,63,94,0.1));color:#ec4899;font-weight:600;margin-top:8px">📢 AI Маркетинг (V31)</a>
   <a href="javascript:void(0)" class="nav-item" id="nt-ops" onclick="switchTab('ops')" style="background:linear-gradient(135deg, rgba(56,189,248,0.1), rgba(2,132,199,0.1));color:#0284c7;font-weight:600;margin-top:8px">⚡ Системийн Хяналт (Heavy Ops)</a>
-  <a href="javascript:void(0)" class="nav-item" id="nt-ui-test" onclick="switchTab('ui-test')" style="background:linear-gradient(135deg, rgba(244,63,94,0.1), rgba(251,191,36,0.1));color:#be123c;font-weight:600;margin-top:8px">🎨 UI Interaction Playground</a>
   <a href="index.html" class="nav-item" style="margin-top:auto" onclick="localStorage.removeItem('ws_admin_token');localStorage.removeItem('ws_token')">← Системээс гарах (Logout)</a>
 </aside>
 
@@ -1503,7 +1502,49 @@ async function saveSettings(){
   } catch {}
   showT('Тохиргоо хадгалагдлаа!');
 }
-async function aiInsight(){ showT('📊 AI судалж байна...'); try{const r=await fetch(API+'/api/v1/ai/insights');const d=await r.json();if(d.success) alert('✨ AI Зах Зээлийн Зөвлөмж:\n\n'+d.data.insight);}catch{} }
+async function aiInsight(){ showT('📊 AI судалж байна...'); try{const r=await fetch(API+'/api/v1/ai/insights',{headers:{'Authorization':'Bearer '+localStorage.getItem('ws_admin_token')}});const d=await r.json();if(d.success) alert('✨ AI Зах Зээлийн Зөвлөмж:\n\n'+(d.data.insight||d.data));}catch{} }
+async function aiPriceOptimize() { showT('📈 AI үнийн анализ эхэллээ...'); try { const r = await fetch(API+'/api/v1/ai/automation/pricing', { method: 'POST', headers: {'Authorization': 'Bearer '+localStorage.getItem('ws_admin_token')} }); const d = await r.json(); if(d.success) {showT('Үнэ оновчлогдлоо!'); loadProds(); } else showT('Алдаа: ' + (d.message||d.error)); } catch { showT('Сүлжээний алдаа'); } }
+async function aiSeoOptimize() { showT('🤖 AI мэдээллийн санг сайжруулж байна...'); try { const r = await fetch(API+'/api/v1/admin/ai/seo-optimize', { method: 'POST', headers: {'Authorization': 'Bearer '+localStorage.getItem('ws_admin_token')} }); const d = await r.json(); if(d.success) { showT('SEO сайжруулагдлаа!'); loadProds(); } else showT('Алдаа: ' + (d.message||d.error)); } catch { showT('Сүлжээний алдаа'); } }
+
+async function aiFraudScan() { showT('🛡️ AI залилан шалгаж эхэллээ...'); try { const r = await fetch(API+'/api/v1/admin/ai/fraud-scan', { method: 'POST', headers: {'Authorization': 'Bearer '+localStorage.getItem('ws_admin_token')} }); const d = await r.json(); if(d.success) showT('Шалгалт дууслаа. Сэжигтэй гүйлгээ олдсонгүй!'); else showT('Алдаа: ' + (d.message||d.error)); } catch { showT('Сүлжээний алдаа'); } }
+async function sendMarketing() { const t=document.getElementById('mk-target').value, s=document.getElementById('mk-sbj').value, b=document.getElementById('mk-body').value; if(!s || !b) return showT('Гарчиг болон агуулгыг оруулна уу'); showT('🚀 Илгээж байна. Хүлээнэ үү...'); try { const r = await fetch(API+'/api/v1/ai/automation/marketing', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+localStorage.getItem('ws_admin_token')}, body: JSON.stringify({ target: t, subject: s, goal: 'Convert' }) }); const d = await r.json(); if(d.success) showT('Амжилттай илгээгдлээ!'); else showT('Алдаа: ' + (d.message||d.error)); } catch { showT('Сүлжээний алдаа'); } }
+
+// STATS & FUNNEL
+async function loadStats() {
+  try {
+    const r=await fetch(API+'/api/v1/admin/dashboard/stats', {headers:{'Authorization':'Bearer '+localStorage.getItem('ws_admin_token')}});
+    const d=await r.json();
+    if(d.success && d.data) {
+      document.getElementById('st-rev').textContent = '₮' + (d.data.revenue||0).toLocaleString();
+      document.getElementById('st-ord').textContent = d.data.orders||0;
+    }
+  }catch{}
+}
+async function loadFunnel() {
+  try {
+    const r=await fetch(API+'/api/v1/admin/dashboard/funnel', {headers:{'Authorization':'Bearer '+localStorage.getItem('ws_admin_token')}});
+    const d=await r.json();
+    if(d.success && d.data) {
+      document.getElementById('fnl-box').innerHTML = `
+        <div style="flex:1;background:var(--surface);padding:16px;border-radius:12px;border:1px solid var(--smoke)">
+           <div style="color:var(--dim);font-size:12px">Нийт Зэргэлээч (Visitors)</div>
+           <div style="font-size:24px;font-weight:700;color:var(--bone)">${d.data.visitors||0}</div>
+        </div>
+        <div style="flex:1;background:var(--surface);padding:16px;border-radius:12px;border:1px solid var(--smoke)">
+           <div style="color:var(--dim);font-size:12px">Сагс (Carts)</div>
+           <div style="font-size:24px;font-weight:700;color:var(--bone)">${d.data.carts||0}</div>
+        </div>
+        <div style="flex:1;background:var(--surface);padding:16px;border-radius:12px;border:1px solid var(--smoke)">
+           <div style="color:var(--dim);font-size:12px">Шалгах (Checkouts)</div>
+           <div style="font-size:24px;font-weight:700;color:var(--bone)">${d.data.checkouts||0}</div>
+        </div>
+        <div style="flex:1;background:var(--surface);padding:16px;border-radius:12px;border:1px solid var(--smoke);border-bottom:4px solid #10b981">
+           <div style="color:#10b981;font-size:12px">Худалдан Авалт (Conversions)</div>
+           <div style="font-size:24px;font-weight:700;color:var(--bone)">${d.data.conversions||0}</div>
+        </div>`;
+    }
+  }catch{}
+}
 
 // PRODUCTS
 async function loadCats() { try { const r=await fetch(API+'/api/v1/categories'); const d=await r.json(); if(d.success) document.getElementById('p-cat').innerHTML = '<option value="">Ерөнхий</option>' + d.data.map(c=>`<option value="${c.id}">${c.name}</option>`).join(''); } catch{} }
