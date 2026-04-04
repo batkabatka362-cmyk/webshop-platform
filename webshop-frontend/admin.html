@@ -923,35 +923,32 @@ async function loadAiStatus() {
       const stat = document.getElementById('ai-status-text');
       if(d.data.aiOnline) { stat.textContent = '● Систем хэвийн (Online)'; stat.style.color = '#10b981'; }
       else { stat.textContent = '● Систем холбогдсонгүй (Унасан эсвэл Mock)'; stat.style.color = '#f59e0b'; }
-      document.getElementById('ai-provider').value = d.data.provider;
-      document.getElementById('ai-model-input').value = d.data.model;
-    }
-  } catch{}
-  
-  // Load Agents State
+      document.getElementById('ai-prasync function runAiBot(type) {
+  showT('AI бодож байна...');
+  const resEl = document.getElementById('ai-'+type+'-res');
+  if(!resEl) return;
+  resEl.textContent = 'Уншиж байна... (Түр хүлээнү үү)';
+  if (type === 'marketing') document.getElementById('ai-marketing-res').style.display='block';
   try {
-    const r2 = await fetch(API+'/api/v1/ai/agents/state'); const d2 = await r2.json();
-    if(d2.success) {
-      document.getElementById('ai-watcher-toggle').checked = d2.active;
-      
-      // Update Budget
-      document.getElementById('ai-budget-display').textContent = '₮' + d2.budget.toLocaleString();
-      
-      // Update Experiments
-      const expBox = document.getElementById('ai-experiments-list');
-      const esc = s => (s||'').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      if(d2.experiments && d2.experiments.length) {
-        let eh = '';
-        d2.experiments.forEach(e => eh += `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--smoke)">[<span style="color:#ef4444">${esc(e.status)}</span>] <b>${esc(e.title)}:</b> ${esc(e.hypothesis)} (Зарцуулсан: ₮${e.cost})</div>`);
-        expBox.innerHTML = eh;
+    let body = {};
+    if (type === 'marketing') body = {target: document.getElementById('ai-mk-target').value, goal: document.getElementById('ai-mk-goal').value};
+    const r=await fetch(API+'/api/v1/ai/automation/'+type, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();
+    // V67 FIX: Escape AI-generated content before inserting into innerHTML (AI output can contain HTML)
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    if(d.success) {
+      if(type==='marketing') {
+        const c = d.data.campaign;
+        document.getElementById('ai-marketing-res').innerHTML = `<b>Subject:</b> ${esc(c.subject)}<br><b>Discount:</b> ${Number(c.discountPercent)||0}%<br><br>${esc(c.body).replace(/\n/g,'<br>')}`;
       } else {
-        expBox.textContent = "Идэвхтэй туршилт алга. AI таамаглал дэвшүүлээгүй байна.";
+        resEl.innerHTML = esc(d.data.analysis).replace(/\n/g,'<br>');
+        if(type==='orders') showT(`Хүлээгдэж буй захиалгуудаас ${d.data.stats?.autoProcessed||0} савлагдах руу автоматаар шилжлээ.`);
       }
-
-      // Update Memory & Logs
-      const memBox = document.getElementById('ai-memory-list');
-      if(d2.memory.length || d2.logs.length) {
-        let h = '';
+    } else {
+      resEl.textContent = 'Алдаа: ' + (d.error?.message || 'Тодорхойгүй');
+    }
+  } catch(err) { resEl.textContent = 'Сүлжээний алдаа.'; showT('Сүлжээний алдаа'); }
+}'';
         d2.memory.forEach(m => h += `<div style="margin-bottom:4px"><span style="color:#9ca3af">[${new Date(m.createdAt).toLocaleTimeString()}]</span> <span style="color:#3b82f6">[MEMORY:${m.type}]</span> ${esc(m.context)}</div>`);
         d2.logs.forEach(l => h += `<div style="margin-bottom:4px"><span style="color:#9ca3af">[${new Date(l.createdAt).toLocaleTimeString()}]</span> <span style="color:#8b5cf6">[ACTION:${l.agent}]</span> ${esc(l.action)} -&gt; ${esc(JSON.stringify(l.details))}</div>`);
         memBox.innerHTML = h;
@@ -1079,17 +1076,32 @@ async function aiFraudScan() {
 function printInvoice(id) {
   const o = ALL_ORDERS.find(x => x.id === id); if(!o) return;
   const items = o.orderItems || o.items || [];
-  const html = `<div style="font-family:sans-serif;padding:40px;max-width:800px;margin:0 auto;color:#000;background:#fff;min-height:100vh"><div style="display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:20px;margin-bottom:20px"><div><h1 style="margin:0">НЭХЭМЖЛЭХ (INVOICE)</h1><div style="color:#666;margin-top:8px">Захиалгын дугаар: ${o.orderNumber || o.id.split('-')[0].toUpperCase()}</div><div style="color:#666;margin-top:4px">Огноо: ${new Date(o.createdAt).toLocaleDateString()}</div></div><div style="text-align:right"><img src="https://chart.googleapis.com/chart?chs=100x100&cht=qr&chl=${o.id}" style="border:1px solid #ccc;padding:4px;border-radius:4px" alt="QR Code"></div></div><div style="display:flex;justify-content:space-between;margin-bottom:30px;font-size:14px"><div><b>Худалдан авагч / Хүлээн авагч:</b><br>${o.shippingAddress?.name||'Зочин'}</div><div style="text-align:right"><b>WEBSHOP ХХК</b><br>Улаанбаатар хот<br>Утас: 7000-0000<br>И-мэйл: info@webshop.mn</div></div><table style="width:100%;border-collapse:collapse;margin-bottom:30px;font-size:14px"><tr style="background:#f4f4f5;border-bottom:2px solid #000"><th style="padding:12px;text-align:left">Барааны нэр</th><th style="padding:12px;text-align:right">Тоо ширхэг</th><th style="padding:12px;text-align:right">Нэгжийн үнэ</th><th style="padding:12px;text-align:right">Нийт үнэ</th></tr>${items.map(i=>`<tr><td style="padding:12px;border-bottom:1px solid #eee">${i.product?.name || i.productName || 'Бараа'}</td><td style="padding:12px;text-align:right;border-bottom:1px solid #eee">${i.quantity}</td><td style="padding:12px;text-align:right;border-bottom:1px solid #eee">₮${(i.unitPrice||0).toLocaleString()}</td><td style="padding:12px;text-align:right;border-bottom:1px solid #eee">₮${(i.totalPrice||0).toLocaleString()}</td></tr>`).join('')}</table><div style="text-align:right;font-size:20px"><b>НИЙТ ТӨЛӨХ ДҮН: ₮${(o.grandTotal||o.subtotal||0).toLocaleString()}</b></div><div style="margin-top:50px;text-align:center;color:#666;font-size:12px;border-top:1px dashed #ccc;padding-top:20px">Биднийг сонгон үйлчлүүлсэнд баярлалаа! Үүнийг хэвлэж баримтжуулан хадгална уу.</div></div>`;
-  document.getElementById('print-area').innerHTML = html;
-  document.getElementById('print-area').style.display = 'block';
-  window.print();
-  document.getElementById('print-area').style.display = 'none';
+  const html = `<div style="font-family:sans-serif;padding:40px;max-width:800px;margin:0 auto;color:#000;background:#fff;min-height:100vh"><div style="display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:20px;margin-bottom:20px"><div><h1 style="margin:0">НЭХЭМЖЛЭХ (INVOICE)</h1><div style="color:#666;margin-top:8px">Захиалгын дугаар: ${o.orderNumber || o.id.split('-')[0].toUpperCase()}</div><div style="color:#666;margin-top:4px">Огноо: ${new Date(o.createdAt).toLocaleDateString()}</div></div><div style="text-align:right"><img src="https://chart.googleapis.com/chart?chs=100x100&cht=qr&chl=${o.id}" style="border:1px solid #ccc;padding:4px;border-radius:4px" alt="QR Code"></div></div><div style="display:flex;justify-content:space-between;margin-bottom:30px;font-size:14px"><div><b>Худалдан авагч / Хүлээн авагч:</b><br>${o.shippingAddress?.name||'Зочин'}</div><div style="text-align:right"><b>WEBSHOP ХХК</b><br>Улаанбаатар хот<br>Утас: 7000-0000<br>И-мэйл: info@webshop.mn</div></div><table style="width:100%;border-collapse:collapse;margin-bottom:30px;font-size// PREDICTIVE INVENTORY (SUPPLIERS)
+async function loadSup() {
+  try {
+    const r=await fetch(API+'/api/v1/admin/dashboard/supply-orders');
+    const d=await r.json();
+    if(!d.success || !Array.isArray(d.data)) return;
+    // V71 FIX: Escape all server-sourced fields to prevent XSS
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    if(d.data.length) {
+      document.getElementById('sobbody').innerHTML=d.data.map(o=>`<tr><td style="color:var(--dim);font-size:12px">${new Date(o.createdAt).toLocaleString()}</td><td style="font-weight:600">${esc(o.product?.name||'Тодорхойгүй')} <br><span style="color:var(--dim);font-size:12px">Код: ${esc(o.productId.slice(-6))}</span></td><td><span style="background:var(--smoke);padding:4px 8px;border-radius:4px">${Number(o.product?.inventory?.quantity||0)} ширхэг</span></td><td style="font-family:monospace;font-size:16px;font-weight:bold;color:${o.aiSuggested?'#8b5cf6':'var(--bone)'}"}>+${Number(o.quantity||0)} ширхэг</td><td style="font-size:12px;color:var(--dim);max-width:200px;line-height:1.4">${esc(o.reason||'Тодорхойгүй')}</td><td>${o.status==='DRAFT' ? `<button class="btn" style="background:#16a34a;color:#fff" onclick="approveSupplyOrder('${esc(o.id)}')">Батлах (Нөөцөд нэмэх)</button>` : `<span style="color:#10b981;font-weight:bold">✓ БАТЛАГДСАН</span>`}</td></tr>`).join('');
+    } else {
+      document.getElementById('sobbody').innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--dim);padding:40px">AI одоогоор ямар нэг бараа дуусна гэж таамаглаагүй байна.</td></tr>';
+    }
+  } catch{}
 }
-async function refundOrder(id) {
-  const amt = prompt('Буцаалт хийх үнийн дүн (₮):');
-  if(!amt || isNaN(Number(amt)) || Number(amt) <= 0) return showT('Буруу дүн оруулсан байна.');
-  const reason = prompt('Буцаалтын шалтгаан:');
-  if(reason === null) return; // User cancelled
+async function approveSupplyOrder(id) {
+  if(confirm('AI-ийн энэ саналыг баталгаажуулж, барааны нөөц дээр бодитоор нэмэх үү?')) {
+    try {
+      // V72 FIX: Check server response before showing success message
+      const r = await fetch(API+'/api/v1/admin/dashboard/supply-orders/'+id+'/approve', {method:'POST'});
+      const d = await r.json();
+      if(d.success) { showT('Амжилттай батлагдаж нөөцөд нэмэгдлээ!'); loadSup(); loadProds(); }
+      else showT('Батлахд алдаа: ' + (d.message || 'Тодорхойгүй'));
+    } catch { showT('Сүлжээний алдаа'); }
+  }
+}// User cancelled
   // V53 FIX: Handle refund errors explicitly instead of silently failing
   try {
     const r = await fetch(API+'/api/v1/orders/'+id+'/refund', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:Number(amt), reason:reason||''})});
@@ -1142,10 +1154,17 @@ async function sendMarketing() {
   const tgt = document.getElementById('mk-target').value;
   const sbj = document.getElementById('mk-sbj').value.trim();
   const t = document.getElementById('mk-body').value.trim();
+  if(!sbj) return showT('Гарчигаа бичнэ үү!');
   if(!t) return showT('Агуулгаа бичнэ үү!');
-  await fetch(API+'/api/v1/marketing', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:tgt, subject:sbj, body:t})}); 
-  showT(`✨ ${tgt.toUpperCase()} сегмент рүү сурталчилгаа пуужин мэт хөөрлөө!`);
-  document.getElementById('mk-body').value=''; document.getElementById('mk-sbj').value='';
+  // V68 FIX: Handle server response, do not assume success
+  try {
+    const r = await fetch(API+'/api/v1/marketing', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:tgt, subject:sbj, body:t})});
+    const d = await r.json();
+    if(d.success) {
+      showT(`✨ ${tgt.toUpperCase()} сегмент рүү сурталчилгаа пуужин мэт хөөрлөө!`);
+      document.getElementById('mk-body').value=''; document.getElementById('mk-sbj').value='';
+    } else showT('Илгээхд алдаа гарлаа: ' + (d.message || 'Тодорхойгүй'));
+  } catch { showT('Сүлжээний алдаа. Илгээгдсэн эсэхийг шалгаарай.'); }
 }
 
 // MATRIX VARIANTS
@@ -1157,15 +1176,37 @@ async function openVarM(id) {
 async function loadVars() {
   try {
     const r=await fetch(API+'/api/v1/products/'+activeVariantProductId+'/variants'); const d=await r.json();
-    document.getElementById('vtbody').innerHTML = d.data.map(v=>`<tr><td style="font-weight:600">${v.name}</td><td>${v.sku}</td><td>₮${v.price}</td><td><span style="font-weight:600;color:#16a34a">${v.stock} ширхэг</span></td><td><button class="btn-ghost del-btn" onclick="delVar('${v.id}')">Устгах</button></td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--dim);padding:20px">Мэтрикс хувилбар хоосон байна.</td></tr>';
+    if(!Array.isArray(d.data)) return;
+    // V69 FIX: Escape variant fields to prevent XSS
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    document.getElementById('vtbody').innerHTML = d.data.map(v=>`<tr><td style="font-weight:600">${esc(v.name)}</td><td>${esc(v.sku)}</td><td>₮${Number(v.price||0).toLocaleString()}</td><td><span style="font-weight:600;color:#16a34a">${Number(v.stock||0)} ширхэг</span></td><td><button class="btn-ghost del-btn" onclick="delVar('${esc(v.id)}')">Устгах</button></td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--dim);padding:20px">Мэтрикс хувилбар хоосон байна.</td></tr>';
   } catch{}
 }
 async function saveVar() {
-  const p = {name: document.getElementById('v-name').value, sku: document.getElementById('v-sku').value, price: document.getElementById('v-price').value, stock: document.getElementById('v-stock').value};
-  if(!p.name) return showT('Нэрээ бичнэ үү');
-  await fetch(API+'/api/v1/products/'+activeVariantProductId+'/variants', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}); showT('Мэтрикс хувилбар нэмэгдлээ!'); loadVars();
+  const name = document.getElementById('v-name').value.trim();
+  const sku  = document.getElementById('v-sku').value.trim();
+  // V70 FIX: Coerce price/stock to numbers before sending to server
+  const price = Number(document.getElementById('v-price').value);
+  const stock = Number(document.getElementById('v-stock').value);
+  if(!name) return showT('Нэрээ бичнэ үү');
+  if(isNaN(price) || price < 0) return showT('Буруу үнэ оруулсан байна');
+  if(isNaN(stock) || stock < 0) return showT('Буруу нөөц оруулсан байна');
+  try {
+    const r = await fetch(API+'/api/v1/products/'+activeVariantProductId+'/variants', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name, sku, price, stock})});
+    const d = await r.json();
+    if(d.success) { showT('Мэтрикс хувилбар нэмэгдлээ!'); loadVars(); }
+    else showT('Хадгалахд алдаа: ' + (d.message || 'Тодорхойгүй'));
+  } catch { showT('Сүлжээний алдаа'); }
 }
-async function delVar(id) { await fetch(API+'/api/v1/products/variants/'+id, {method:'DELETE'}); loadVars(); }
+async function delVar(id) {
+  if(!confirm('Устгах уу?')) return;
+  try {
+    const r = await fetch(API+'/api/v1/products/variants/'+id, {method:'DELETE'});
+    const d = await r.json();
+    if(d.success) { showT('Устгагдлаа'); loadVars(); }
+    else showT('Устгахд алдаа: ' + (d.message || 'Тодорхойгүй'));
+  } catch { showT('Сүлжээний алдаа'); }
+}
 
 // PREDICTIVE INVENTORY (SUPPLIERS)
 async function loadSup() { 
