@@ -71,7 +71,9 @@ adminAuthRouter.post('/login', handle(async (req, res) => {
   })
 
   const { passwordHash, ...safe } = admin
-  res.json({ success: true, data: { admin: safe, accessToken, refreshToken } })
+  // B80 FIX: Return 'token' field at top level so frontend d.token works correctly
+  // Previously returned { data: { accessToken } } but frontend expected { token }
+  res.json({ success: true, token: accessToken, refreshToken, data: { admin: safe, accessToken, refreshToken } })
 }))
 
 adminAuthRouter.get('/me', adminAuth, handle(async (req, res) => {
@@ -320,10 +322,19 @@ productAdminRouter.delete('/products/:id', handle(async (req, res) => {
 }))
 
 // Variants
+// B84 FIX: Add Zod validation for variant creation — previously raw body went straight to DB
+const VariantSchema = z.object({
+  name:       z.string().min(1).max(255),
+  sku:        z.string().min(1).max(100),
+  price:      z.number().min(0),
+  stock:      z.number().int().min(0).default(0),
+  attributes: z.any().optional(),
+})
+
 productAdminRouter.post('/products/:id/variants', handle(async (req, res) => {
-  const { name, sku, price, attributes, stock } = req.body
+  const dto = VariantSchema.parse(req.body)
   const variant = await prisma.productVariant.create({
-    data: { productId: req.params.id, name, sku, price, attributes, stock: stock || 0 },
+    data: { productId: req.params.id, ...dto },
   })
   await logActivity(req, 'create_variant', 'product_variant', variant.id)
   res.status(201).json({ success: true, data: variant })

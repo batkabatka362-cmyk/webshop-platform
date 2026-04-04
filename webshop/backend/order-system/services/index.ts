@@ -44,11 +44,11 @@ const prefix = process.env.ORDER_NUMBER_PREFIX || 'WS'
 const pad    = parseInt(process.env.ORDER_NUMBER_SEQUENCE_PAD || '6', 10)
 
 async function generateOrderNumber(): Promise<string> {
-  const count = await prisma.order.count()
-  const seq   = String(count + 1).padStart(pad, '0')
-  // V43 FIX: Add random suffix to prevent duplicate order numbers under concurrent requests
-  const suffix = crypto.randomBytes(2).toString('hex').toUpperCase()
-  return `${prefix}-${seq}-${suffix}`
+  // B81 FIX: count()-based numbering has a race condition under concurrency.
+  // Use timestamp + cryptographic random suffix for guaranteed uniqueness.
+  const ts  = Date.now().toString(36).toUpperCase()
+  const rnd = crypto.randomBytes(3).toString('hex').toUpperCase()
+  return `${prefix}-${ts}-${rnd}`
 }
 
 function generateOrderId(): string {
@@ -325,6 +325,13 @@ export class OrderService {
   async cancelOrder(orderId: string, actorId?: string, reason?: string) {
     const order = await this.repo.findById(orderId)
     if (!order) throw new Error('Order not found')
+
+    // B82 FIX: IDOR — verify the requesting customer owns this order
+    // Previously any authenticated customer could cancel any order by guessing the ID
+    if (actorId && order.customerId && order.customerId !== actorId) {
+      throw Object.assign(new Error('Forbidden: You do not own this order'), { statusCode: 403 })
+    }
+
     if (['shipped', 'delivered', 'completed', 'cancelled'].includes(order.status)) {
       throw new Error(`Cannot cancel order in '${order.status}' status`)
     }
@@ -411,7 +418,10 @@ const AdminStatusUpdateSchema = z.object({
   note:   z.string().max(500).optional(),
 })
 
-orderRouter.patch('/:id/status', handle(async (req, res) => {
+// B83 FIX: This route was missing adminAuth middleware — any request with a forged
+// admin-looking payload could escalate order status without a valid admin token.
+import { adminAuth } from '../admin-system/services'
+orderRouter.patch('/:id/status', adminAuth, handle(async (req, res) => {
   const adminId = (req as any).admin?.id
   if (!adminId) {
     return res.status(403).json({ success: false, error: { message: 'Admin authentication required to update order status' } })
