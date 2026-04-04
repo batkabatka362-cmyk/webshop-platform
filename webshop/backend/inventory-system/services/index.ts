@@ -269,20 +269,28 @@ inventoryRouter.get('/:productId', handle(async (req, res) => {
   res.json({ success: true, data: stock })
 }))
 
-// V43 FIX (BUG-30): Protect mutation endpoints with admin auth
+// V45 FIX (BUG-30): Protect mutation and cleanup endpoints with admin auth + Zod validation
+import { z } from 'zod'
+
+const adjustSchema = z.object({
+  change: z.number(),
+  type: z.string().optional().default('manual'),
+  note: z.string().optional()
+})
+
 inventoryRouter.post('/:productId/init', adminAuth, handle(async (req, res) => {
   const { quantity, warehouseLocation } = req.body
-  const inv = await inventoryService.initInventory(req.params.productId, quantity, warehouseLocation)
+  const inv = await inventoryService.initInventory(req.params.productId, Number(quantity), warehouseLocation)
   res.status(201).json({ success: true, data: inv })
 }))
 
 inventoryRouter.post('/:productId/adjust', adminAuth, handle(async (req, res) => {
-  const { change, type, note } = req.body
-  const result = await inventoryService.adjustStock(req.params.productId, change, type || 'manual', undefined, note)
+  const { change, type, note } = adjustSchema.parse(req.body)
+  const result = await inventoryService.adjustStock(req.params.productId, change, type, undefined, note)
   res.json({ success: true, data: result })
 }))
 
-inventoryRouter.post('/cleanup', handle(async (_req, res) => {
+inventoryRouter.post('/cleanup', adminAuth, handle(async (_req, res) => {
   const result = await inventoryService.cleanExpiredReservations()
   res.json({ success: true, data: result })
 }))

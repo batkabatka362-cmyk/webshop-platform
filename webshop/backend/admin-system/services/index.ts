@@ -13,8 +13,8 @@ import crypto from 'crypto'
 
 declare const prisma: PrismaClient
 
-const ADMIN_SECRET      = process.env.ADMIN_JWT_SECRET || 'dev-admin-secret'
-const ADMIN_REFRESH     = process.env.ADMIN_REFRESH_SECRET || 'dev-admin-refresh'
+const ADMIN_SECRET      = process.env.ADMIN_JWT_SECRET || 'webshop-admin-secret-2026'
+const ADMIN_REFRESH     = process.env.ADMIN_REFRESH_SECRET || 'webshop-admin-refresh-2026'
 const ADMIN_EXP         = process.env.ADMIN_JWT_EXPIRES_IN || '8h'
 const ADMIN_REFRESH_EXP = process.env.ADMIN_REFRESH_EXPIRES_IN || '1d'
 const BCRYPT_ROUNDS     = parseInt(process.env.ADMIN_BCRYPT_ROUNDS || '12', 10)
@@ -91,37 +91,23 @@ export const dashboardRouter = Router()
 dashboardRouter.use(adminAuth)
 
 dashboardRouter.get('/stats', handle(async (_req, res) => {
-  const now       = new Date()
-  const today     = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-
-  const [
-    totalProducts, totalCustomers, totalOrders,
-    todayOrders, pendingOrders, revenue, monthlyRevenue,
-    lowStockCount, recentOrders
-  ] = await Promise.all([
-    prisma.product.count({ where: { deletedAt: null } }),
-    prisma.customer.count(),
-    prisma.order.count({ where: { deletedAt: null } }),
-    prisma.order.count({ where: { createdAt: { gte: today }, deletedAt: null } }),
-    prisma.order.count({ where: { status: 'pending', deletedAt: null } }),
-    prisma.order.aggregate({ where: { paymentStatus: 'paid', deletedAt: null }, _sum: { grandTotal: true } }),
-    prisma.order.aggregate({ where: { paymentStatus: 'paid', createdAt: { gte: thisMonth }, deletedAt: null }, _sum: { grandTotal: true } }),
-    prisma.inventory.count({ where: { status: { in: ['low_stock', 'out_of_stock'] } } }),
-    prisma.order.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 10, include: { items: true } }),
-  ])
-
-  res.json({
-    success: true,
-    data: {
-      totalProducts, totalCustomers, totalOrders,
-      todayOrders, pendingOrders, lowStockCount,
-      totalRevenue:   revenue._sum.grandTotal || 0,
-      monthlyRevenue: monthlyRevenue._sum.grandTotal || 0,
-      recentOrders,
-    },
-  })
+  const [revenue, orders] = await Promise.all([
+    prisma.order.aggregate({ _sum: { grandTotal: true }, where: { status: { notIn: ['cancelled', 'deleted'] } } }),
+    prisma.order.count({ where: { status: { notIn: ['cancelled', 'deleted'] } } })
+  ]);
+  res.json({ success: true, data: { revenue: revenue._sum.grandTotal || 0, orders } });
 }))
+
+dashboardRouter.get('/funnel', handle(async (_req, res) => {
+  const [visitors, carts, checkouts, conversions] = await Promise.all([
+    prisma.systemEvent.count({ where: { eventType: 'PAGE_VIEW' } }),
+    prisma.cart.count({ where: { items: { some: {} } } }),
+    prisma.checkout.count(),
+    prisma.order.count({ where: { status: { notIn: ['cancelled', 'deleted'] } } })
+  ]);
+  res.json({ success: true, data: { visitors: visitors || 0, carts, checkouts, conversions } });
+}))
+
 
 dashboardRouter.post('/ai/predict-inventory', handle(async (req, res) => {
   const thirtyDaysAgo = new Date()
@@ -371,29 +357,60 @@ productAdminRouter.delete('/categories/:id', handle(async (req, res) => {
 
 // Customers list (admin)
 productAdminRouter.get('/customers', handle(async (req, res) => {
-  const page  = parseInt(req.query.page as string) || 1
-  const limit = parseInt(req.query.limit as string) || 20
-  const [items, total] = await Promise.all([
-    prisma.customer.findMany({
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit, take: limit,
-      select: { id: true, email: true, firstName: true, lastName: true, phone: true, isActive: true, createdAt: true, lastLoginAt: true },
-    }),
-    prisma.customer.count(),
-  ])
-  res.json({ success: true, data: { items, total, page, limit } })
+  const customers = await prisma.customer.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });
+  const activities = await prisma.adminActivity.findMany({ where: { resource: 'Customer', action: { in: ['WALLET_TX', 'CRM_NOTE'] } } });
+  
+  const ltvData = await Promise.all(customers.map(async (c) => {
+     const orders = await prisma.order.findMany({ where: { OR: [{ customerId: c.id }, { guestEmail: c.email }], status: { not: 'cancelled' } }, select: { subtotal: true } });
+     const ltv = orders.reduce((sum, o) => sum + (o.subtotal || 0), 0);
+     const wallet = activities.filter((a: any) => a.resourceId === c.id && a.action === 'WALLET_TX').reduce((sum, a: any) => sum + (a.details?.amount || 0), 0);
+     const segment = ltv > 1000000 ? 'VIP 🐋' : (ltv > 0 ? 'Байнгын' : 'Сонжооч');
+     return { ...c, ltv, wallet, segment };
+  }));
+  res.json({ success: true, data: ltvData });
 }))
 
+productAdminRouter.get('/customers/:id/notes', handle(async (req, res) => {
+  const notes = await prisma.adminActivity.findMany({ 
+    where: { resource: 'Customer', resourceId: req.params.id, action: 'CRM_NOTE' }, 
+    orderBy: { createdAt: 'desc' }, 
+    include: { admin: { select: { firstName: true, lastName: true } } } 
+  });
+  res.json({ success: true, data: notes });
+}))
+
+productAdminRouter.post('/customers/:id/notes', handle(async (req, res) => {
+  const { note } = req.body;
+  if (!note) return res.status(400).json({ success: false, message: 'Note required' });
+  await logActivity(req, 'CRM_NOTE', 'Customer', req.params.id, { note });
+  res.json({ success: true });
+}))
+
+productAdminRouter.post('/customers/:id/wallet', handle(async (req, res) => {
+  const { amount, reason } = req.body;
+  if (!amount || amount <= 0) return res.status(400).json({ success: false, message: 'Valid amount required' });
+  await logActivity(req, 'WALLET_TX', 'Customer', req.params.id, { amount: Number(amount), reason: reason || 'Manual adjustment' });
+  res.json({ success: true });
+}))
+
+productAdminRouter.patch('/customers/:id', handle(async (req, res) => {
+  const { firstName, lastName, email } = req.body;
+  const customer = await prisma.customer.update({ where: { id: req.params.id }, data: { firstName, lastName: lastName || '', email } });
+  await logActivity(req, 'update', 'Customer', customer.id);
+  res.json({ success: true });
+}))
+
+
 // Activity log — NEVER silently fail (audit must be reliable)
-async function logActivity(req: Request, action: string, resource: string, resourceId?: string) {
+async function logActivity(req: Request, action: string, resource: string, resourceId?: string, details?: any) {
   const adminId = (req as any).admin?.id
   if (!adminId) return
   try {
     await prisma.adminActivity.create({
-      data: { adminId, action, resource, resourceId, ipAddress: req.ip },
+      data: { adminId, action, resource, resourceId, ipAddress: req.ip, details: details || {} },
     })
   } catch (err) {
-    // Audit log failure is CRITICAL — surface in server error log
     console.error(`[ADMIN AUDIT FAILURE] Failed to log: admin=${adminId} action=${action} resource=${resource}/${resourceId}`, err)
   }
 }
+

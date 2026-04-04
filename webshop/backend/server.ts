@@ -120,7 +120,7 @@ io.on('connection', (socket) => {
   // V45: Secure Admin Room Join Logic
   socket.on('join_admin', (token: string) => {
     try {
-      const decoded = jwt.verify(token, process.env.ADMIN_JWT_SECRET || 'CHANGE_ME_openssl_rand_hex_32');
+      const decoded = jwt.verify(token, process.env.ADMIN_JWT_SECRET || 'webshop-admin-secret-2026');
       if (decoded && (decoded as any).role === 'ADMIN') {
         socket.join('admin_room');
         Logger.info('REALTIME', 'admin.joined', { id: socket.id, email: (decoded as any).email });
@@ -374,22 +374,23 @@ app.use(`${BASE}/payments`, paymentRouter)
 // Inventory routes (admin)
 app.use(`${BASE}/inventory`, inventoryRouter)
 
-// Customer auth routes
+// ─── API Routes ───────────────────────────────
 app.use(`${BASE}/auth`, customerRouter)
 
-// Admin routes
+// Admin/System Core
 app.use(`${BASE}/admin/auth`, adminAuthRouter)
 app.use(`${BASE}/admin/dashboard`, dashboardRouter)
 app.use(`${BASE}/admin/products`, fileUploadRouter)
 app.use(`${BASE}/admin`, productAdminRouter)
 
-// System info
+// Legacy compatibility for current Frontend
+app.use(`${BASE}/admin/stats`,  dashboardRouter)
+app.use(`${BASE}/admin/funnel`, dashboardRouter)
+app.use(`${BASE}/customers`,    productAdminRouter)
+
+// System Services
 app.use(`${BASE}/system`, rateLimitRouter)
-
-// Storefront features
 app.use(`${BASE}/storefront`, storefrontRouter)
-
-// V43: Mount missing system routers
 app.use(`${BASE}/search`, searchRouter)
 app.use(`${BASE}/coupons/admin`, couponAdminRouter)
 app.use(`${BASE}/coupons/checkout`, couponCheckoutRouter)
@@ -397,8 +398,10 @@ app.use(`${BASE}/notifications`, notificationRouter)
 app.use(`${BASE}/shipping/admin`, shippingAdminRouter)
 app.use(`${BASE}/shipping/tracking`, trackingRouter)
 
-// AI Automation
+// AI Automation & Root AI Services
 app.use(`${BASE}`, aiRouter)
+
+
 
 // ─── Real-time Test Endpoints (Dev Only) ──────
 app.get('/test-ping', (req, res) => {

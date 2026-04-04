@@ -13,6 +13,9 @@ import { Router, Request, Response, NextFunction } from 'express'
 import { couponService } from '../services'
 import { z } from 'zod'
 
+// V85: Shared Prisma to prevent connection leaks
+declare const prisma: any;
+
 function handle(fn: (req: Request, res: Response) => Promise<void>) {
   return (req: Request, res: Response, next: NextFunction) => fn(req, res).catch((err) => {
     res.status(err.statusCode || 500).json({ success: false, error: { message: err.message } })
@@ -31,8 +34,12 @@ const CouponSchema = z.object({
 })
 
 // ─── Admin Coupon Routes ──────────────────────
+import { adminAuth } from '../../../admin-system/services'
 
 export const couponAdminRouter = Router()
+
+// Protect all admin routes with adminAuth
+couponAdminRouter.use(adminAuth)
 
 couponAdminRouter.post('/', handle(async (req, res) => {
   const dto    = CouponSchema.parse(req.body)
@@ -48,7 +55,6 @@ couponAdminRouter.get('/', handle(async (req, res) => {
 }))
 
 couponAdminRouter.put('/:id', handle(async (req, res) => {
-  // Explicitly block direct usageCount modification at the API gateway
   const rawBody = req.body
   if ('usageCount' in rawBody) delete rawBody.usageCount
   const dto    = CouponSchema.partial().parse(rawBody)
@@ -57,7 +63,6 @@ couponAdminRouter.put('/:id', handle(async (req, res) => {
 }))
 
 couponAdminRouter.delete('/:id', handle(async (req, res) => {
-  // Soft deactivation — coupon history and usage records are NEVER hard-deleted
   const coupon = await couponService.deactivate(req.params.id)
   res.json({ success: true, data: { id: coupon.id, active: false, message: 'Coupon deactivated (preserved for audit)' } })
 }))
@@ -89,13 +94,16 @@ couponCheckoutRouter.post('/validate', handle(async (req, res) => {
   const { code } = req.body
   if (!code) return res.status(400).json({ success: false, message: 'Code required' })
   
-  const { PrismaClient } = require('@prisma/client')
-  const prisma = new PrismaClient()
-  const coupon = await prisma.coupon.findUnique({ where: { code: code.toUpperCase() } })
+  // Use existing service logic instead of duplicating it
+  const result = await couponService.validateAndApply(code, 99999999); // Use huge amount just to check if it exists/active/expired
   
-  if (!coupon || !coupon.active) return res.json({ success: false })
-  if (coupon.expiresAt && coupon.expiresAt < new Date()) return res.json({ success: false })
-  if (coupon.usageLimit > 0 && coupon.usageCount >= coupon.usageLimit) return res.json({ success: false })
-  
+  if (!result.valid && result.message === 'Coupon not found') return res.json({ success: false });
+  if (!result.valid && result.message === 'Coupon is inactive') return res.json({ success: false });
+  if (!result.valid && result.message === 'Coupon has expired') return res.json({ success: false });
+
+  // Fetch full details if basic checks pass
+  const coupon = await couponService.findByCode(code);
+  if (!coupon) return res.json({ success: false });
+
   res.json({ success: true, data: { discountValue: coupon.discountValue, type: coupon.discountType } })
 }))

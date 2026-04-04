@@ -7,78 +7,137 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --void:#F8FAFC; --deep:#F1F5F9; --smoke:#E2E8F0; --smoke2:#CBD5E1;
-  --bone:#0F172A; --dim:#64748B; --ember:#1E293B; --lava:#020617;
-  --bg: #F1F5F9; --surface: #FFFFFF;
-  --accent: #6366F1; --accent-dark: #4F46E5; --accent-glow: rgba(99, 102, 241, 0.25);
-  --danger: #EF4444; --danger-soft: #FEE2E2;
-  --radius: 10px; --shadow-sm: 0 1px 3px rgba(0,0,0,0.1); --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+  --bg: #030C1A; /* Deep oceanic abyss */
+  --surface: #09152B; /* Darker blue panel */
+  --deep: #0D1E3A; /* Slightly lighter deep blue */
+  --smoke: rgba(255, 255, 255, 0.05); /* Ghost borders */
+  --smoke2: rgba(255, 255, 255, 0.1);
+  --bone: #F8FAFC; /* Primary bright text */
+  --dim: #64748B; /* Muted slate text */
+  --ember: #F59E0B; /* Vibrant orange active action (From image 2) */
+  --lava: #EA580C; /* Deeper orange */
+  
+  --accent: #22D3EE; /* Vivid Cyan (From image 1) */
+  --accent-dark: #0891B2; 
+  --accent-glow: rgba(34, 211, 238, 0.25);
+  
+  --danger: #EF4444; 
+  --danger-soft: rgba(239, 68, 68, 0.15);
+  
+  --radius: 18px; 
+  --shadow-sm: 0 4px 12px rgba(0,0,0,0.4); 
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.5);
+  --shadow-lg: 0 16px 40px rgba(0,0,0,0.6), 0 4px 12px rgba(0,0,0,0.4);
+  
+  --glass: rgba(9, 21, 43, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.08);
 }
 * { margin:0; padding:0; box-sizing:border-box; -webkit-font-smoothing: antialiased; }
-body { background: var(--bg); font-family:'Inter',sans-serif; color:var(--bone); display:flex; height:100vh; overflow:hidden; }
-aside { width:280px; background:var(--surface); border-right:1px solid var(--smoke); padding:32px 20px; display:flex; flex-direction:column; gap:6px; overflow-y:auto; box-shadow: 4px 0 24px rgba(0,0,0,0.02); }
-.logo { font-size:18px; font-weight:800; letter-spacing:-0.01em; margin-bottom:24px; padding:0 12px; display:flex; align-items:center; gap:10px; color:var(--lava); }
-.nav-item { padding:10px 14px; border-radius:var(--radius); display:flex; align-items:center; gap:10px; text-decoration:none; color:var(--dim); font-weight:500; font-size:14px; transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
-.nav-item:hover { background:var(--deep); color:var(--bone); transform: translateX(2px); }
-.nav-item.active { background:var(--accent); color:#fff; box-shadow: 0 4px 12px var(--accent-glow); }
-main { flex:1; padding:48px 64px; overflow-y:auto; scroll-behavior: smooth; }
-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:40px; }
-h1 { font-weight:700; font-size:32px; letter-spacing:-0.02em; color:var(--lava); }
+body { 
+  background-color: var(--bg); 
+  background-image: url('bg-admin.png'); 
+  background-size: cover; 
+  background-position: center; 
+  background-attachment: fixed; 
+  font-family:'Inter',sans-serif; 
+  color:var(--bone); 
+  display:flex; 
+  height:100vh; 
+  overflow:hidden; 
+}
 
-/* PREMIUM BUTTON SYSTEM */
+aside { width:280px; background:var(--glass); border-right:1px solid var(--glass-border); padding:32px 20px; display:flex; flex-direction:column; gap:6px; overflow-y:auto; box-shadow: 4px 0 24px rgba(0,0,0,0.4); backdrop-filter: blur(24px); }
+.logo { font-size:18px; font-weight:800; letter-spacing:-0.01em; margin-bottom:24px; padding:0 12px; display:flex; align-items:center; gap:10px; color:var(--accent); text-shadow: 0 0 15px var(--accent-glow); }
+.nav-item { padding:12px 16px; border-radius:14px; display:flex; align-items:center; gap:10px; text-decoration:none; color:var(--dim); font-weight:500; font-size:14px; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); border: 1px solid transparent; }
+.nav-item:hover { background:var(--smoke); color:var(--bone); transform: translateX(6px); border-color: var(--smoke2); }
+.nav-item.active { background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(234, 88, 12, 0.3)); color:var(--ember); border-color: rgba(245, 158, 11, 0.4); box-shadow: 0 8px 24px rgba(245, 158, 11, 0.15); font-weight: 600; text-shadow: 0 0 10px rgba(245,158,11,0.5); }
+
+main { flex:1; padding:48px 64px; overflow-y:auto; scroll-behavior: smooth; background: radial-gradient(circle at top right, rgba(34, 211, 238, 0.1), transparent 500px), radial-gradient(circle at bottom left, rgba(245, 158, 11, 0.05), transparent 500px); }
+header { display:flex; justify-content:space-between; align-items:center; margin-bottom:40px; }
+h1 { font-weight:700; font-size:32px; letter-spacing:-0.03em; color:var(--bone); text-shadow: 0 0 20px rgba(255,255,255,0.1); }
+
+/* PREMIUM PILL-SHAPED NEON BUTTON SYSTEM */
 .btn { 
   display: inline-flex; align-items:center; justify-content:center; gap:8px;
-  background:var(--ember); color:#fff; border:none; padding:10px 22px; border-radius:var(--radius); 
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); 
+  color:#fff; border: 1px solid rgba(255,255,255,0.2); 
+  padding:12px 28px; border-radius:50px; /* Pill shape */
   font-weight:600; font-size:14px; cursor:pointer; 
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: var(--shadow-sm); border: 1px solid rgba(255,255,255,0.05);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4), inset 0 2px 4px rgba(255,255,255,0.2);
+  position: relative; overflow: hidden;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
-.btn:hover { background:var(--lava); transform: translateY(-1px); box-shadow: var(--shadow-md); }
-.btn:active { transform: translateY(0) scale(0.98); }
+.btn::after { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(255,255,255,0.3), transparent); opacity: 0; transition: opacity 0.2s; }
+.btn:hover { background: linear-gradient(135deg, #FBBF24 0%, #EA580C 100%); transform: translateY(-3px) scale(1.02); box-shadow: 0 12px 30px rgba(234, 88, 12, 0.6), inset 0 2px 4px rgba(255,255,255,0.4); border-color: rgba(255,255,255,0.5); }
+.btn:hover::after { opacity: 1; }
+.btn:active { transform: translateY(0) scale(0.96); }
 
 .btn-ai { 
-  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%); 
+  background: linear-gradient(135deg, #0891B2 0%, #0369A1 100%); 
   color:#fff; 
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  border: 1px solid rgba(34, 211, 238, 0.5);
+  box-shadow: 0 6px 20px rgba(8, 145, 178, 0.5), inset 0 2px 4px rgba(255,255,255,0.2);
 }
 .btn-ai:hover { 
-  background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); 
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5); 
-  transform: translateY(-2px);
+  background: linear-gradient(135deg, #06B6D4 0%, #0284C7 100%); 
+  border-color: rgba(34, 211, 238, 0.8);
+  box-shadow: 0 12px 30px rgba(34, 211, 238, 0.7), inset 0 2px 4px rgba(255,255,255,0.4); 
 }
 
 .btn-ghost { 
-  color:var(--dim); background:transparent; border:1px solid transparent; 
-  padding:6px 12px; font-weight:500; font-size:13px;
+  color:var(--dim); background: rgba(13, 30, 58, 0.5); border:1px solid var(--smoke2); 
+  padding:10px 24px; font-weight:500; font-size:13px; backdrop-filter: blur(6px);
+  border-radius: 50px;
+  box-shadow: none;
 }
-.btn-ghost:hover { background:var(--deep); border-color: var(--smoke); color:var(--bone); }
+.btn-ghost:hover { background:rgba(34, 211, 238, 0.1); border-color: var(--accent); color:var(--accent); box-shadow: 0 0 20px var(--accent-glow); }
 
-.del-btn { color:var(--danger); background:transparent; }
-.del-btn:hover { background:var(--danger-soft); color:var(--danger); border-color: var(--danger-soft); }
+.del-btn { color:var(--danger); border-color: var(--danger-soft); background: rgba(239, 68, 68, 0.05); }
+.del-btn:hover { background: linear-gradient(135deg, #F43F5E 0%, #BE123C 100%); color:#fff; border-color: #FDA4AF; box-shadow: 0 8px 25px rgba(239,68,68,0.5); }
 
-table { width:100%; border-collapse:separate; border-spacing:0; background:var(--surface); border-radius:16px; box-shadow: var(--shadow-md); overflow:hidden; border: 1px solid var(--smoke); }
+.glass-card {
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: var(--shadow-lg);
+}
+
+.glass-panel { 
+  background: var(--glass); 
+  backdrop-filter:blur(16px); 
+  padding:24px; 
+  border-radius:16px; 
+  border:1px solid var(--glass-border); 
+  box-shadow:var(--shadow-md); 
+  margin-bottom:24px; 
+}
+
+table { width:100%; border-collapse:separate; border-spacing:0; background:var(--glass); backdrop-filter:blur(16px); border-radius:20px; box-shadow: var(--shadow-lg); overflow:hidden; border: 1px solid var(--glass-border); }
 th, td { padding:18px 24px; text-align:left; border-bottom:1px solid var(--smoke); font-size:14px; }
-th { color:var(--dim); font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.05em; background: var(--deep); }
+th { color:var(--accent); font-weight:700; text-transform:uppercase; font-size:11px; letter-spacing:0.05em; background: rgba(0,0,0,0.2); }
 tr:last-child td { border-bottom: none; }
-tr:hover { background-color: #FAFAFA; }
+tr:hover { background-color: rgba(255,255,255,0.03); }
 
-.p-img { width:48px; height:48px; border-radius:10px; object-fit:cover; background:var(--deep); border:1px solid var(--smoke); transition: transform 0.2s; }
-.p-img:hover { transform: scale(1.1); }
+.p-img { width:48px; height:48px; border-radius:12px; object-fit:cover; background:var(--deep); border:1px solid var(--smoke); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+.p-img:hover { transform: scale(1.15) rotate(2deg); box-shadow: 0 10px 20px rgba(0,0,0,0.5); z-index: 10; position: relative; }
 
 /* Modal Refresh */
-.modal-overlay { position:fixed; inset:0; background:rgba(15, 23, 42, 0.6); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1); z-index:100; }
-.modal { background:var(--surface); width:100%; max-width:740px; border-radius:24px; padding:40px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); transform:scale(0.95); transition:all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.modal-overlay { position:fixed; inset:0; background:rgba(3, 12, 26, 0.85); backdrop-filter:blur(12px); display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1); z-index:100; }
+.modal { background:var(--glass); border: 1px solid var(--glass-border); width:100%; max-width:740px; border-radius:24px; padding:40px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); transform:scale(0.95); transition:all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .modal-overlay.on .modal { transform:scale(1); }
-.m-head { font-size:24px; font-weight:700; color:var(--lava); margin-bottom:32px; letter-spacing:-0.02em; }
+.m-head { font-size:24px; font-weight:700; color:var(--bone); margin-bottom:32px; letter-spacing:-0.01em; text-shadow: 0 0 15px rgba(255,255,255,0.1); }
 
-.fi { width:100%; padding:12px 16px; border:2px solid var(--smoke); border-radius:var(--radius); font-size:14px; transition: all 0.2s; }
-.fi:focus { border-color:var(--accent); outline:none; box-shadow: 0 0 0 4px var(--accent-glow); }
+.fi { width:100%; padding:14px 18px; border:1px solid var(--smoke2); border-radius:var(--radius); font-size:14px; background: rgba(0,0,0,0.2); color: var(--bone); transition: all 0.3s; }
+.fi:focus { border-color:var(--accent); outline:none; box-shadow: 0 0 0 4px var(--accent-glow); background: rgba(0,0,0,0.4); }
 
-.toast { position:fixed; bottom:40px; right:40px; background:var(--bone); color:#fff; padding:18px 28px; border-radius:14px; font-size:15px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); }
+.toast { position:fixed; bottom:40px; right:40px; background:var(--accent-dark); border: 1px solid var(--accent); color:#fff; padding:18px 28px; border-radius:16px; font-size:15px; box-shadow: 0 20px 40px rgba(8, 145, 178, 0.4); backdrop-filter: blur(8px); }
 .toast.on { opacity:1; pointer-events:all; }
 
-#login-screen { position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column; }
+#login-screen { position:fixed;inset:0;background:var(--bg); background-image: radial-gradient(circle at center, rgba(34,211,238,0.1) 0%, transparent 70%); z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column; }
+
 @media print { body * { visibility: hidden; } #print-area, #print-area * { visibility: visible; } #print-area { position: absolute; left: 0; top: 0; width: 100%; border: none; background: #fff; padding: 0; margin: 0; } }
 </style>
 </head>
@@ -86,12 +145,12 @@ tr:hover { background-color: #FAFAFA; }
 
 <div id="print-area" style="display:none;background:#fff;z-index:9999999;position:fixed;inset:0"></div>
 <div id="login-screen" style="display:none">
-  <div style="background:var(--surface);padding:40px;border-radius:16px;width:100%;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,.1)">
-    <div style="font-size:24px;font-weight:700;margin-bottom:8px;text-align:center">🛡️ WEBSHOP V23</div>
-    <div style="color:var(--dim);text-align:center;margin-bottom:32px">Аюулгүй Системд Нэвтрэх</div>
-    <div class="fg"><label>И-мэйл хаяг</label><input type="email" id="l-email" class="fi" value="admin@webshop.mn"></div>
-    <div class="fg"><label>Нууц үг</label><input type="password" id="l-pass" class="fi" value="admin123"></div>
-    <button class="btn" style="width:100%;margin-top:24px;padding:14px;font-size:16px" onclick="doLogin()">Нэвтрэх</button>
+  <div class="glass-card" style="width:100%;max-width:400px;text-align:center">
+    <div style="font-size:26px;font-weight:800;margin-bottom:8px;color:var(--accent);text-shadow:0 0 15px var(--accent-glow)">🛡️ WEBSHOP V23</div>
+    <div style="color:var(--dim);margin-bottom:32px">Аюулгүй Системд Нэвтрэх</div>
+    <div class="fg" style="text-align:left;margin-bottom:16px;"><label style="display:block;margin-bottom:8px;font-size:13px;color:var(--dim)">И-мэйл хаяг</label><input type="email" id="l-email" class="fi" value="admin@webshop.mn"></div>
+    <div class="fg" style="text-align:left;margin-bottom:24px;"><label style="display:block;margin-bottom:8px;font-size:13px;color:var(--dim)">Нууц үг</label><input type="password" id="l-pass" class="fi" value="admin123"></div>
+    <button class="btn" style="width:100%;padding:14px;font-size:16px;border-radius:14px" onclick="doLogin()">Аюулгүй Нэвтрэх</button>
   </div>
 </div>
 
@@ -121,10 +180,10 @@ tr:hover { background-color: #FAFAFA; }
     <header>
       <h1>Агуулах (Бараанууд)</h1>
       <div style="display:flex;gap:16px;align-items:center">
-        <div id="p-valuation" style="font-weight:600;font-size:14px;color:var(--dim)">📦 Агуулахын нийт үнэлгээ: Уншиж байна...</div>
+        <div id="p-valuation" style="font-weight:600;font-size:14px;color:var(--accent)">📦 Агуулахын нийт үнэлгээ: Уншиж байна...</div>
         <button class="btn btn-ai" onclick="aiPriceOptimize()">📈 Үнийн AI Оновчлол</button>
         <button class="btn btn-ai" onclick="aiSeoOptimize()">🤖 AI SEO Оновчлол</button>
-        <button class="btn del-btn" style="background:#fee2e2;color:#ef4444" onclick="bulkDelP()">🗑️ Сонгосныг Устгах</button>
+        <button class="btn del-btn" onclick="bulkDelP()">🗑️ Сонгосныг Устгах</button>
         <button class="btn" onclick="openM()">+ Бараа нэмэх</button>
       </div>
     </header>
@@ -142,40 +201,40 @@ tr:hover { background-color: #FAFAFA; }
       <h1>Захиалга & Хүргэлтийн хяналт</h1>
       <div style="display:flex;gap:12px">
         <button class="btn btn-ai" onclick="aiInsight()">✨ AI Зах зээлийн зөвлөгөө</button>
-        <button class="btn" style="background:#ef4444" onclick="aiFraudScan()">🛡️ AI Залилан шалгах (Fraud Scan)</button>
+        <button class="btn del-btn" onclick="aiFraudScan()">🛡️ AI Залилан шалгах (Fraud Scan)</button>
         <button class="btn" onclick="openOM()">+ Гараар захиалга үүсгэх</button>
       </div>
     </header>
 
-    <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke);margin-bottom:24px">
-      <div style="color:var(--dim);font-size:13px;text-transform:uppercase;margin-bottom:16px;font-weight:600">📉 Сүүлийн 7 хоногийн Орлогын График</div>
+    <div class="glass-panel">
+      <div style="color:var(--accent);font-size:13px;text-transform:uppercase;margin-bottom:16px;font-weight:600">📉 Сүүлийн 7 хоногийн Орлогын График</div>
       <canvas id="revChart" height="60"></canvas>
     </div>
 
     <div style="display:flex;gap:24px;margin-bottom:24px">
-      <div style="flex:1;background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke)">
-        <div style="color:var(--dim);font-size:13px;text-transform:uppercase;margin-bottom:16px;font-weight:600">🍩 Борлуулалт Ангиллаар</div>
+      <div class="glass-panel" style="flex:1; margin-bottom:0;">
+        <div style="color:var(--accent);font-size:13px;text-transform:uppercase;margin-bottom:16px;font-weight:600">🍩 Борлуулалт Ангиллаар</div>
         <div style="height:220px;display:flex;justify-content:center"><canvas id="catChart"></canvas></div>
       </div>
-      <div style="flex:1;background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke)">
-        <div style="color:var(--dim);font-size:13px;text-transform:uppercase;margin-bottom:16px;font-weight:600">📊 Шилдэг 5 Бараа</div>
+      <div class="glass-panel" style="flex:1; margin-bottom:0;">
+        <div style="color:var(--accent);font-size:13px;text-transform:uppercase;margin-bottom:16px;font-weight:600">📊 Шилдэг 5 Бараа</div>
         <div style="height:220px;display:flex;justify-content:center"><canvas id="topChart"></canvas></div>
       </div>
     </div>
 
-    <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--smoke);margin-bottom:24px">
-      <div style="color:var(--dim);font-size:13px;text-transform:uppercase;margin-bottom:16px;font-weight:600">📊 Борлуулалтын Юүлүүр Аналитик (Funnel)</div>
+    <div class="glass-panel">
+      <div style="color:var(--accent);font-size:13px;text-transform:uppercase;margin-bottom:16px;font-weight:600">📊 Борлуулалтын Юүлүүр Аналитик (Funnel)</div>
       <div style="display:flex;gap:12px;text-align:center" id="fnl-box">Уншиж байна...</div>
     </div>
 
     <div style="display:flex;gap:24px;margin-bottom:32px">
-      <div style="background:var(--surface);padding:24px;border-radius:12px;flex:1;border:1px solid var(--smoke)">
+      <div class="glass-panel" style="flex:1; margin-bottom:0; text-align:center;">
         <div style="color:var(--dim);font-size:13px;text-transform:uppercase;margin-bottom:8px">Нийт Орлого (Total Gross)</div>
-        <div style="font-size:28px;font-weight:600;font-family:monospace" id="st-rev">₮0</div>
+        <div style="font-size:32px;font-weight:700;color:var(--accent);font-family:monospace;text-shadow:0 0 10px var(--accent-glow)" id="st-rev">₮0</div>
       </div>
-      <div style="background:var(--surface);padding:24px;border-radius:12px;flex:1;border:1px solid var(--smoke)">
+      <div class="glass-panel" style="flex:1; margin-bottom:0; text-align:center;">
         <div style="color:var(--dim);font-size:13px;text-transform:uppercase;margin-bottom:8px">Нийт Захиалга (Total Orders)</div>
-        <div style="font-size:28px;font-weight:600;font-family:monospace" id="st-ord">0</div>
+        <div style="font-size:32px;font-weight:700;color:var(--accent);font-family:monospace;text-shadow:0 0 10px var(--accent-glow)" id="st-ord">0</div>
       </div>
     </div>
     <table id="otbl">
@@ -198,7 +257,7 @@ tr:hover { background-color: #FAFAFA; }
   <!-- ABANDONED CARTS VIEW -->
   <div id="view-abandoned" style="display:none">
     <header><h1>Орхигдсон Сагс (Recovery)</h1></header>
-    <div style="background:#fef2f2;color:#991b1b;padding:16px;border-radius:8px;margin-bottom:24px;font-size:14px;border:1px solid #fca5a5">
+    <div style="background:var(--danger-soft);color:var(--danger);padding:18px;border-radius:16px;margin-bottom:24px;font-size:14px;border:1px solid rgba(244,63,94,0.3);box-shadow:0 4px 15px rgba(244,63,94,0.1)">
       <b>Шинжилгээ:</b> Хүмүүсийн 60% нь сагсандаа бараа хийгээд орхидог. Эдгээр хэрэглэгчид рүү <b>Урамшууллын И-мэйл</b> илгээж борлуулалт болгон хувиргах боломжтой.
     </div>
     <table id="atbl">
@@ -210,9 +269,9 @@ tr:hover { background-color: #FAFAFA; }
   <!-- MARKETING VIEW -->
   <div id="view-marketing" style="display:none">
     <header><h1>Маркетинг & И-мэйл Цацах (Broadcast)</h1></header>
-    <div style="background:#fefce8;padding:24px;border-radius:12px;border:1px solid #fef08a;margin-bottom:24px;max-width:800px">
-      <div style="font-weight:600;margin-bottom:8px;color:#854d0e">🤖 Ухаалаг Автоматжуулалт (Auto Drip Campaign)</div>
-      <div style="display:flex;align-items:center;gap:12px"><input type="checkbox" id="mk-auto" style="width:20px;height:20px" onchange="showT(this.checked?'Ухаалаг систем асаалаа! Үүнээс хойш автоматаар илгээнэ.':'Автоматжуулалт унтарлаа!')"><label for="mk-auto" style="font-size:14px;color:#854d0e;cursor:pointer">Сүүлийн 30 хоног худалдан авалт хийгээгүй (Унтмал) хэрэглэгчдэд 3 хоног тутамд 10% хямдралын купон автоматаар илгээх ухаалаг тохиргоо.</label></div>
+    <div style="background:rgba(245, 158, 11, 0.1);padding:24px;border-radius:16px;border:1px solid rgba(245, 158, 11, 0.3);margin-bottom:24px;max-width:800px;box-shadow:0 4px 15px rgba(245,158,11,0.05)">
+      <div style="font-weight:600;margin-bottom:8px;color:var(--ember)">🤖 Ухаалаг Автоматжуулалт (Auto Drip Campaign)</div>
+      <div style="display:flex;align-items:center;gap:12px"><input type="checkbox" id="mk-auto" style="width:20px;height:20px;accent-color:var(--ember)" onchange="showT(this.checked?'Ухаалаг систем асаалаа! Үүнээс хойш автоматаар илгээнэ.':'Автоматжуулалт унтарлаа!')"><label for="mk-auto" style="font-size:14px;color:var(--bone);cursor:pointer">Сүүлийн 30 хоног худалдан авалт хийгээгүй (Унтмал) хэрэглэгчдэд 3 хоног тутамд 10% хямдралын купон автоматаар илгээх ухаалаг тохиргоо.</label></div>
     </div>
     <div style="background:var(--surface);padding:32px;border-radius:12px;border:1px solid var(--smoke);max-width:800px">
       <div style="color:var(--dim);font-size:14px;margin-bottom:24px">Бүх бүртгэлтэй хэрэглэгчид рүүгээ эсвэл зөвхөн зорилтот бүлэг рүүгээ шинэ бараа болон хямдралын мэдээллийг нэн даруй түгээх систем.</div>
@@ -310,36 +369,36 @@ tr:hover { background-color: #FAFAFA; }
     
     <!-- V24 ROI Metrics Dashboard -->
     <div style="display:flex;gap:24px;margin-bottom:24px">
-      <div style="flex:1;background:rgba(255,255,255,0.8);backdrop-filter:blur(10px);border:1px solid rgba(168,85,247,0.3);padding:24px;border-radius:16px;box-shadow:0 8px 32px rgba(168,85,247,0.1)">
+      <div class="glass-panel" style="flex:1; border-color: rgba(168,85,247,0.5); box-shadow:0 8px 32px rgba(168,85,247,0.15)">
         <div style="color:var(--dim);font-size:12px;text-transform:uppercase;font-weight:600;margin-bottom:8px">AI-ийн Олсон Нийт Орлого 📈</div>
-        <div style="font-size:28px;font-weight:800;color:#7c3aed" id="cg-roi-revenue">₮0</div>
+        <div style="font-size:28px;font-weight:800;color:#c084fc;text-shadow:0 0 15px rgba(168,85,247,0.4)" id="cg-roi-revenue">₮0</div>
       </div>
-      <div style="flex:1;background:rgba(255,255,255,0.8);backdrop-filter:blur(10px);border:1px solid rgba(16,185,129,0.3);padding:24px;border-radius:16px;box-shadow:0 8px 32px rgba(16,185,129,0.1)">
+      <div class="glass-panel" style="flex:1; border-color: rgba(16,185,129,0.5); box-shadow:0 8px 32px rgba(16,185,129,0.15)">
         <div style="color:var(--dim);font-size:12px;text-transform:uppercase;font-weight:600;margin-bottom:8px">AI Хямдралын Хөрвөлт 🎟️</div>
         <div style="display:flex;align-items:baseline;gap:8px">
-          <div style="font-size:28px;font-weight:800;color:#10b981" id="cg-roi-conversion">0%</div>
+          <div style="font-size:28px;font-weight:800;color:#34d399;text-shadow:0 0 15px rgba(16,185,129,0.4)" id="cg-roi-conversion">0%</div>
           <div style="font-size:14px;color:var(--dim)" id="cg-roi-promos">(0 / 0)</div>
         </div>
       </div>
-      <div style="flex:1;background:rgba(255,255,255,0.8);backdrop-filter:blur(10px);border:1px solid rgba(245,158,11,0.3);padding:24px;border-radius:16px;box-shadow:0 8px 32px rgba(245,158,11,0.1)">
+      <div class="glass-panel" style="flex:1; border-color: rgba(245,158,11,0.5); box-shadow:0 8px 32px rgba(245,158,11,0.15)">
         <div style="color:var(--dim);font-size:12px;text-transform:uppercase;font-weight:600;margin-bottom:8px">Идэвхтэй AI Бараа 🛍️</div>
-        <div style="font-size:28px;font-weight:800;color:#d97706" id="cg-roi-products">0</div>
+        <div style="font-size:28px;font-weight:800;color:#fbbf24;text-shadow:0 0 15px rgba(245,158,11,0.4)" id="cg-roi-products">0</div>
       </div>
     </div>
     
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
       <!-- Chat Promo Codes -->
-      <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid #7c3aed">
-        <div style="font-weight:600;margin-bottom:12px;font-size:16px"><span style="color:#7c3aed">🎁</span> AI Худалдагчийн Promo Кодууд</div>
+      <div class="glass-panel" style="border-color: rgba(168,85,247,0.4)">
+        <div style="font-weight:600;margin-bottom:12px;font-size:16px"><span style="color:#c084fc">🎁</span> AI Худалдагчийн Promo Кодууд</div>
         <div style="font-size:13px;color:var(--dim);margin-bottom:20px;line-height:1.5">Нийтийн вэбсайт дээрх AI Chat Negotiator хэрэглэгчидтэй харилцаж байхдаа эдгээр тусгай хямдралын кодуудыг үүсгэсэн байна.</div>
-        <div id="ai-conglomerate-promos" style="max-height:400px;overflow-y:auto;font-family:monospace;font-size:13px;color:var(--bone);background:var(--bg);padding:16px;border-radius:8px">Уншиж байна...</div>
+        <div id="ai-conglomerate-promos" style="max-height:400px;overflow-y:auto;font-family:monospace;font-size:13px;color:var(--bone);background:rgba(0,0,0,0.3);padding:16px;border-radius:8px">Уншиж байна...</div>
       </div>
       
       <!-- Sourcing Products -->
-      <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid #10b981">
-        <div style="font-weight:600;margin-bottom:12px;font-size:16px"><span style="color:#10b981">🛍️</span> AI Автоматаар үүсгэсэн Бараанууд</div>
+      <div class="glass-panel" style="border-color: rgba(16,185,129,0.4)">
+        <div style="font-weight:600;margin-bottom:12px;font-size:16px"><span style="color:#34d399">🛍️</span> AI Автоматаар үүсгэсэн Бараанууд</div>
         <div style="font-size:13px;color:var(--dim);margin-bottom:20px;line-height:1.5">AI Sourcing Agent трэнд судалгаанд (CMO) үндэслэн эдгээр бараануудыг бие даан зохион бүтээж дэлгүүрт нэмсэн байна.</div>
-        <div id="ai-conglomerate-products" style="max-height:400px;overflow-y:auto;font-family:monospace;font-size:13px;color:var(--bone);background:var(--bg);padding:16px;border-radius:8px">Уншиж байна...</div>
+        <div id="ai-conglomerate-products" style="max-height:400px;overflow-y:auto;font-family:monospace;font-size:13px;color:var(--bone);background:rgba(0,0,0,0.3);padding:16px;border-radius:8px">Уншиж байна...</div>
       </div>
     </div>
   </div>
@@ -352,8 +411,8 @@ tr:hover { background-color: #FAFAFA; }
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
       <!-- Panel A: Persona Options -->
-      <div style="background:var(--surface);border:1px solid #3b82f6;border-radius:12px;padding:24px">
-        <h2 style="margin-top:0;color:#3b82f6;font-size:16px">🎭 AI Зан Төлөв & Стратеги (Persona)</h2>
+      <div class="glass-panel" style="border-color: rgba(59,130,246,0.5)">
+        <h2 style="margin-top:0;color:#60a5fa;font-size:16px"><span style="text-shadow:0 0 10px rgba(59,130,246,0.6)">🎭 AI Зан Төлөв & Стратеги (Persona)</span></h2>
         <div class="fg">
           <label>Дуу хоолойн өнгө ба Хандлага (Tone)</label>
           <select id="train-tone" class="fi">
@@ -371,26 +430,26 @@ tr:hover { background-color: #FAFAFA; }
           <label>Үндсэн Дүрэм & Заавар (Strict Instructions)</label>
           <textarea id="train-rules" class="fi" style="min-height:80px" placeholder="Жнь: Өрсөлдөгч компанийн нэрийг хэзээ ч бүү дурд."></textarea>
         </div>
-        <button class="btn btn-ai" style="width:100%;background:#3b82f6;color:#fff" onclick="savePersona()">💾 Зан Төлөвийг Хадгалах</button>
+        <button class="btn btn-ai" style="width:100%;margin-top:8px" onclick="savePersona()">💾 Зан Төлөвийг Хадгалах</button>
       </div>
 
       <!-- Panel B: RLHF Sandbox -->
-      <div style="background:var(--surface);border:1px solid #eab308;border-radius:12px;padding:24px;display:flex;flex-direction:column">
-        <h2 style="margin-top:0;color:#eab308;font-size:16px">⚖️ Алдаанаас Сургах (RLHF Memory)</h2>
+      <div class="glass-panel" style="border-color: rgba(234,179,8,0.5);display:flex;flex-direction:column">
+        <h2 style="margin-top:0;color:#facc15;font-size:16px"><span style="text-shadow:0 0 10px rgba(234,179,8,0.6)">⚖️ Алдаанаас Сургах (RLHF Memory)</span></h2>
         <p style="font-size:13px;color:var(--dim);margin-bottom:12px;line-height:1.4">AI-ийн гаргасан алдаа эсвэл буруу хариултыг энд зааж өгөн, үүрд санах ОЙ (Memory) руу суулгана. (Дахин хэзээ ч тэр алдааг гаргахгүй)</p>
         <textarea id="train-rlhf" class="fi" style="margin-bottom:12px;flex:1" placeholder="Жнь: Хэрвээ хүн 'Нууц үг юу вэ?' гэвэл 'Нууц үг байхгүй' гэж хэл. Өөр зүйл битгий ярь."></textarea>
-        <button class="btn" style="background:#eab308;color:#000;font-weight:bold" onclick="submitAiCorrection()">⚡ Даруй Сургах (Flash Memory)</button>
+        <button class="btn" style="background:linear-gradient(135deg, #eab308 0%, #ca8a04 100%);color:#fff;font-weight:bold" onclick="submitAiCorrection()">⚡ Даруй Сургах (Flash Memory)</button>
       </div>
 
       <!-- Panel C: Semantic Knowledge (RAG) -->
-      <div style="grid-column:1 / span 2;background:var(--surface);border:1px solid var(--smoke);border-radius:12px;padding:24px">
+      <div class="glass-panel" style="grid-column:1 / span 2;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
           <h2 style="margin:0;font-size:16px;color:var(--bone)">📚 Тархины багтаамж (Ерөнхий Мэдлэг / RAG)</h2>
-          <button class="btn" style="background:var(--bg);color:var(--bone);border:1px solid var(--smoke)" onclick="openKbM()">+ Гараар Мэдлэг Нэмэх</button>
+          <button class="btn btn-ghost" onclick="openKbM()">+ Гараар Мэдлэг Нэмэх</button>
         </div>
         
-        <div style="display:flex;gap:12px;margin-bottom:16px;background:#171717;padding:12px;border-radius:8px">
-          <input type="text" id="train-url" class="fi" style="flex:1" placeholder="🌐 Вэб хуудасны холбоос оруулах (Жнь: https://www.apple.com/iphone)">
+        <div style="display:flex;gap:12px;margin-bottom:16px;background:rgba(0,0,0,0.2);padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.05)">
+          <input type="text" id="train-url" class="fi" style="flex:1;margin:0" placeholder="🌐 Вэб хуудасны холбоос оруулах (Жнь: https://www.apple.com/iphone)">
           <button class="btn" style="background:#10b981;color:#fff" onclick="scrapeUrlForAi()">🕸️ Холбоосоор Уншиж Сурах</button>
         </div>
 
@@ -826,10 +885,16 @@ async function loadLogs() {
 
 // Routing
 const ALL_TABS = ['products', 'orders', 'customers', 'abandoned', 'marketing', 'coupons', 'suppliers', 'logs', 'settings', 'ai', 'conglomerate', 'kb', 'omni', 'ops'];
+// V80 CACHE & SWEEPING: Prevents excessive API calls when navigating tabs
+const _CACHE = {}; 
 function switchTab(t) {
   ALL_TABS.forEach(x => { document.getElementById('nt-'+x).classList.remove('active'); document.getElementById('view-'+x).style.display = 'none'; });
   document.getElementById('nt-'+t).classList.add('active'); document.getElementById('view-'+t).style.display = 'block';
   
+  const now = Date.now();
+  if (_CACHE[t] && (now - _CACHE[t]) < 15000) return; // 15s debounce for admin re-loads
+  _CACHE[t] = now;
+
   if(t === 'products') loadProds();
   if(t === 'orders') { loadOrders(); loadStats(); loadProds(); loadFunnel(); }
   if(t === 'settings') loadSettings();
@@ -842,7 +907,7 @@ function switchTab(t) {
   if(t === 'kb') loadKb();
   if(t === 'omni') loadOmni();
   if(t === 'ops') { loadOpsMetrics(); loadOpsJobs(); loadOpsKeys(); }
-  if(t === 'conglomerate') { document.getElementById('ai-conglomerate-promos').innerHTML='Уншиж байна...'; document.getElementById('ai-conglomerate-products').innerHTML='Уншиж байна...'; loadConglomerate(); }
+  if(t === 'conglomerate') { loadConglomerate(); }
 }
 function showT(m){ const e = document.getElementById('toast'); e.textContent = m; e.classList.add('on'); setTimeout(()=>e.classList.remove('on'), 3500); }
 
@@ -1184,7 +1249,11 @@ async function approveSupplyOrder(id) {
       else showT('Батлахд алдаа: ' + (d.message || 'Тодорхойгүй'));
     } catch { showT('Сүлжээний алдаа'); }
   }
-}// User cancelled
+}
+async function doRefund(id) {
+  const amt = prompt('Буцаалт хийх дүн?');
+  if(!amt) return;
+  const reason = prompt('Шалтгаан?');
   // V53 FIX: Handle refund errors explicitly instead of silently failing
   try {
     const r = await fetch(API+'/api/v1/orders/'+id+'/refund', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:Number(amt), reason:reason||''})});
