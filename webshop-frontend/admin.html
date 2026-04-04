@@ -7,47 +7,75 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --void:#E4E4E7; --deep:#F4F4F5; --smoke:#D4D4D8; --smoke2:#A1A1AA;
-  --bone:#27272A; --dim:#71717A; --ember:#18181B; --lava:#000000;
-  --bg: #F4F4F5; --surface: #FFFFFF;
+  --void:#F8FAFC; --deep:#F1F5F9; --smoke:#E2E8F0; --smoke2:#CBD5E1;
+  --bone:#0F172A; --dim:#64748B; --ember:#1E293B; --lava:#020617;
+  --bg: #F1F5F9; --surface: #FFFFFF;
+  --accent: #6366F1; --accent-dark: #4F46E5; --accent-glow: rgba(99, 102, 241, 0.25);
+  --danger: #EF4444; --danger-soft: #FEE2E2;
+  --radius: 10px; --shadow-sm: 0 1px 3px rgba(0,0,0,0.1); --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
 }
-* { margin:0; padding:0; box-sizing:border-box; }
+* { margin:0; padding:0; box-sizing:border-box; -webkit-font-smoothing: antialiased; }
 body { background: var(--bg); font-family:'Inter',sans-serif; color:var(--bone); display:flex; height:100vh; overflow:hidden; }
-aside { width:260px; background:var(--surface); border-right:1px solid var(--smoke); padding:32px 24px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; }
-.logo { font-size:20px; font-weight:800; letter-spacing:1px; margin-bottom:12px; display:flex; align-items:center; gap:8px }
-.nav-item { padding:12px 16px; border-radius:8px; display:block; text-decoration:none; color:var(--dim); font-weight:500; transition:all .2s; }
-.nav-item.active, .nav-item:hover { background:var(--smoke); color:var(--bone); }
-main { flex:1; padding:40px 60px; overflow-y:auto; }
-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:32px; }
-h1 { font-weight:600; font-size:28px; }
-.btn { background:var(--ember); color:#fff; border:none; padding:10px 20px; border-radius:6px; font-weight:500; cursor:pointer; transition:all .2s; font-size:14px; }
-.btn:hover { background:var(--lava); box-shadow:0 4px 12px rgba(0,0,0,.15); }
-.btn-ai { background:linear-gradient(135deg, #6366f1, #a855f7); color:#fff; }
-.btn-ai:hover { box-shadow:0 4px 20px rgba(168, 85, 247, .4); }
-table { width:100%; border-collapse:collapse; background:var(--surface); border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.04); }
-th, td { padding:16px 24px; text-align:left; border-bottom:1px solid var(--smoke); font-size:14px; }
-th { color:var(--dim); font-weight:500; text-transform:uppercase; font-size:12px; letter-spacing:1px; }
-.p-img { width:44px; height:44px; border-radius:6px; object-fit:cover; background:var(--smoke); border:1px solid var(--smoke2); }
-.btn-ghost { color:var(--dim); background:none; border:none; cursor:pointer; font-weight:500; padding:4px 8px; border-radius:4px; }
-.btn-ghost:hover { background:var(--smoke); color:var(--bone); }
-.del-btn { color:#ef4444; }
-.del-btn:hover { background:#fee2e2; }
+aside { width:280px; background:var(--surface); border-right:1px solid var(--smoke); padding:32px 20px; display:flex; flex-direction:column; gap:6px; overflow-y:auto; box-shadow: 4px 0 24px rgba(0,0,0,0.02); }
+.logo { font-size:18px; font-weight:800; letter-spacing:-0.01em; margin-bottom:24px; padding:0 12px; display:flex; align-items:center; gap:10px; color:var(--lava); }
+.nav-item { padding:10px 14px; border-radius:var(--radius); display:flex; align-items:center; gap:10px; text-decoration:none; color:var(--dim); font-weight:500; font-size:14px; transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+.nav-item:hover { background:var(--deep); color:var(--bone); transform: translateX(2px); }
+.nav-item.active { background:var(--accent); color:#fff; box-shadow: 0 4px 12px var(--accent-glow); }
+main { flex:1; padding:48px 64px; overflow-y:auto; scroll-behavior: smooth; }
+header { display:flex; justify-content:space-between; align-items:center; margin-bottom:40px; }
+h1 { font-weight:700; font-size:32px; letter-spacing:-0.02em; color:var(--lava); }
 
-/* Modal */
-.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .3s; z-index:100; }
-.modal-overlay.on { opacity:1; pointer-events:all; }
-.modal { background:var(--surface); width:100%; max-width:700px; border-radius:16px; padding:32px; box-shadow:0 10px 40px rgba(0,0,0,.1); transform:translateY(20px); transition:transform .3s; max-height:90vh; overflow-y:auto; }
-.modal-overlay.on .modal { transform:translateY(0); }
-.m-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; font-size:20px; font-weight:600; }
-.cx { background:none; border:none; cursor:pointer; font-size:20px; color:var(--dim); }
-.fg { display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
-.fg label { font-size:12px; font-weight:600; color:var(--dim); text-transform:uppercase; letter-spacing:.5px; }
-.fi { padding:12px; border:1px solid var(--smoke); border-radius:8px; font-family:'Inter',sans-serif; font-size:14px; outline:none; transition:border-color .2s; }
-.fi:focus { border-color:var(--ember); }
-textarea.fi { resize:vertical; min-height:90px; line-height: 1.5; }
-.pv-box { width:80px; height:80px; border-radius:8px; object-fit:cover; border:1px solid var(--smoke2); display:none; margin-top:8px; }
+/* PREMIUM BUTTON SYSTEM */
+.btn { 
+  display: inline-flex; align-items:center; justify-content:center; gap:8px;
+  background:var(--ember); color:#fff; border:none; padding:10px 22px; border-radius:var(--radius); 
+  font-weight:600; font-size:14px; cursor:pointer; 
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm); border: 1px solid rgba(255,255,255,0.05);
+}
+.btn:hover { background:var(--lava); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.btn:active { transform: translateY(0) scale(0.98); }
 
-.toast { position:fixed; bottom:32px; right:32px; background:var(--bone); color:#fff; padding:16px 24px; border-radius:8px; font-size:14px; opacity:0; pointer-events:none; transition:opacity .3s; z-index:99999; box-shadow:0 4px 20px rgba(0,0,0,.2); font-weight: 500; }
+.btn-ai { 
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%); 
+  color:#fff; 
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+.btn-ai:hover { 
+  background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); 
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5); 
+  transform: translateY(-2px);
+}
+
+.btn-ghost { 
+  color:var(--dim); background:transparent; border:1px solid transparent; 
+  padding:6px 12px; font-weight:500; font-size:13px;
+}
+.btn-ghost:hover { background:var(--deep); border-color: var(--smoke); color:var(--bone); }
+
+.del-btn { color:var(--danger); background:transparent; }
+.del-btn:hover { background:var(--danger-soft); color:var(--danger); border-color: var(--danger-soft); }
+
+table { width:100%; border-collapse:separate; border-spacing:0; background:var(--surface); border-radius:16px; box-shadow: var(--shadow-md); overflow:hidden; border: 1px solid var(--smoke); }
+th, td { padding:18px 24px; text-align:left; border-bottom:1px solid var(--smoke); font-size:14px; }
+th { color:var(--dim); font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.05em; background: var(--deep); }
+tr:last-child td { border-bottom: none; }
+tr:hover { background-color: #FAFAFA; }
+
+.p-img { width:48px; height:48px; border-radius:10px; object-fit:cover; background:var(--deep); border:1px solid var(--smoke); transition: transform 0.2s; }
+.p-img:hover { transform: scale(1.1); }
+
+/* Modal Refresh */
+.modal-overlay { position:fixed; inset:0; background:rgba(15, 23, 42, 0.6); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1); z-index:100; }
+.modal { background:var(--surface); width:100%; max-width:740px; border-radius:24px; padding:40px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); transform:scale(0.95); transition:all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.modal-overlay.on .modal { transform:scale(1); }
+.m-head { font-size:24px; font-weight:700; color:var(--lava); margin-bottom:32px; letter-spacing:-0.02em; }
+
+.fi { width:100%; padding:12px 16px; border:2px solid var(--smoke); border-radius:var(--radius); font-size:14px; transition: all 0.2s; }
+.fi:focus { border-color:var(--accent); outline:none; box-shadow: 0 0 0 4px var(--accent-glow); }
+
+.toast { position:fixed; bottom:40px; right:40px; background:var(--bone); color:#fff; padding:18px 28px; border-radius:14px; font-size:15px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); }
 .toast.on { opacity:1; pointer-events:all; }
 
 #login-screen { position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column; }
@@ -83,6 +111,7 @@ textarea.fi { resize:vertical; min-height:90px; line-height: 1.5; }
   <a href="javascript:void(0)" class="nav-item" id="nt-kb" onclick="switchTab('kb')" style="background:linear-gradient(135deg, rgba(234,179,8,0.1), rgba(245,158,11,0.1));color:#d97706;font-weight:600;margin-top:8px">📚 AI Мэдлэгийн Сан (V29)</a>
   <a href="javascript:void(0)" class="nav-item" id="nt-omni" onclick="switchTab('omni')" style="background:linear-gradient(135deg, rgba(236,72,153,0.1), rgba(244,63,94,0.1));color:#ec4899;font-weight:600;margin-top:8px">📢 AI Маркетинг (V31)</a>
   <a href="javascript:void(0)" class="nav-item" id="nt-ops" onclick="switchTab('ops')" style="background:linear-gradient(135deg, rgba(56,189,248,0.1), rgba(2,132,199,0.1));color:#0284c7;font-weight:600;margin-top:8px">⚡ Системийн Хяналт (Heavy Ops)</a>
+  <a href="javascript:void(0)" class="nav-item" id="nt-ui-test" onclick="switchTab('ui-test')" style="background:linear-gradient(135deg, rgba(244,63,94,0.1), rgba(251,191,36,0.1));color:#be123c;font-weight:600;margin-top:8px">🎨 UI Interaction Playground</a>
   <a href="index.html" class="nav-item" style="margin-top:auto" onclick="localStorage.removeItem('ws_admin_token');localStorage.removeItem('ws_token')">← Системээс гарах (Logout)</a>
 </aside>
 
@@ -228,6 +257,38 @@ textarea.fi { resize:vertical; min-height:90px; line-height: 1.5; }
       <thead><tr><th>Огноо</th><th>Үйлдэл</th><th>Модуль</th><th>ID болон Дэлгэрэнгүй Мэдээлэл</th></tr></thead>
       <tbody id="ltbody"><tr><td colspan="4" style="text-align:center;color:var(--dim);padding:40px">Уншиж байна...</td></tr></tbody>
     </table>
+  </div>
+
+  <!-- UI TEST VIEW -->
+  <div id="view-ui-test" style="display:none">
+    <header><h1>UI Interaction Playground</h1></header>
+    <div style="background:var(--surface);padding:40px;border-radius:24px;border:1px solid var(--smoke);box-shadow:var(--shadow-lg)">
+      <div style="margin-bottom:32px">
+        <h3 style="margin-bottom:16px;color:var(--dim);text-transform:uppercase;font-size:12px">Primary Button Interactions</h3>
+        <div style="display:flex;gap:20px;flex-wrap:wrap">
+          <button class="btn">Default Slate</button>
+          <button class="btn" style="background:var(--accent)">Accent Indigo</button>
+          <button class="btn btn-ai">Vibrant AI Gradient</button>
+          <button class="btn" style="background:#10b981">Success Emerald</button>
+          <button class="btn" style="background:#f59e0b">Warning Amber</button>
+        </div>
+      </div>
+      <div style="margin-bottom:32px">
+        <h3 style="margin-bottom:16px;color:var(--dim);text-transform:uppercase;font-size:12px">Secondary & Ghost Variations</h3>
+        <div style="display:flex;gap:20px;flex-wrap:wrap">
+          <button class="btn-ghost">Minimal Ghost</button>
+          <button class="btn-ghost" style="border-color:var(--smoke)">Outlined Border</button>
+          <button class="btn-ghost del-btn">Destructive Action</button>
+        </div>
+      </div>
+      <div style="margin-bottom:32px">
+        <h3 style="margin-bottom:16px;color:var(--dim);text-transform:uppercase;font-size:12px">Interactive Loading & Status</h3>
+        <div style="display:flex;gap:20px">
+          <button class="btn" onclick="this.innerHTML='🔄 Processing...';setTimeout(()=>this.innerHTML='✅ Complete!',2000)">Click to Test Logic</button>
+          <button class="btn btn-ai" onclick="showT('Micro-interaction logic tested!')">Show Notification Toast</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- SETTINGS VIEW -->
@@ -923,7 +984,21 @@ async function loadAiStatus() {
       const stat = document.getElementById('ai-status-text');
       if(d.data.aiOnline) { stat.textContent = '● Систем хэвийн (Online)'; stat.style.color = '#10b981'; }
       else { stat.textContent = '● Систем холбогдсонгүй (Унасан эсвэл Mock)'; stat.style.color = '#f59e0b'; }
-      document.getElementById('ai-prasync function runAiBot(type) {
+      const memBox = document.getElementById('ai-memory-box');
+      if(memBox) {
+         const r2 = await fetch(API+'/api/v1/ai/automation/memory'); const d2 = await r2.json();
+         if(d2.success && d2.memory) {
+            let h = '';
+            const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            d2.memory.forEach(m => h += `<div style="margin-bottom:4px"><span style="color:#9ca3af">[${new Date(m.createdAt).toLocaleTimeString()}]</span> <span style="color:#3b82f6">[MEMORY:${m.type}]</span> ${esc(m.context)}</div>`);
+            memBox.innerHTML = h || "<div>SYSTEM INITIALIZED. NO MEMORY FOUND.</div>";
+         }
+      }
+    }
+  } catch(e) { console.error('AI status load failed', e); }
+}
+
+async function runAiBot(type) {
   showT('AI бодож байна...');
   const resEl = document.getElementById('ai-'+type+'-res');
   if(!resEl) return;
@@ -934,7 +1009,6 @@ async function loadAiStatus() {
     if (type === 'marketing') body = {target: document.getElementById('ai-mk-target').value, goal: document.getElementById('ai-mk-goal').value};
     const r=await fetch(API+'/api/v1/ai/automation/'+type, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const d=await r.json();
-    // V67 FIX: Escape AI-generated content before inserting into innerHTML (AI output can contain HTML)
     const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     if(d.success) {
       if(type==='marketing') {
@@ -948,15 +1022,6 @@ async function loadAiStatus() {
       resEl.textContent = 'Алдаа: ' + (d.error?.message || 'Тодорхойгүй');
     }
   } catch(err) { resEl.textContent = 'Сүлжээний алдаа.'; showT('Сүлжээний алдаа'); }
-}'';
-        d2.memory.forEach(m => h += `<div style="margin-bottom:4px"><span style="color:#9ca3af">[${new Date(m.createdAt).toLocaleTimeString()}]</span> <span style="color:#3b82f6">[MEMORY:${m.type}]</span> ${esc(m.context)}</div>`);
-        d2.logs.forEach(l => h += `<div style="margin-bottom:4px"><span style="color:#9ca3af">[${new Date(l.createdAt).toLocaleTimeString()}]</span> <span style="color:#8b5cf6">[ACTION:${l.agent}]</span> ${esc(l.action)} -&gt; ${esc(JSON.stringify(l.details))}</div>`);
-        memBox.innerHTML = h;
-      } else {
-        memBox.innerHTML = "<div>SYSTEM INITIALIZED. NO MEMORY FOUND.</div>";
-      }
-    }
-  } catch{}
 }
 async function loadConglomerate() {
   try {
@@ -1076,20 +1141,38 @@ async function aiFraudScan() {
 function printInvoice(id) {
   const o = ALL_ORDERS.find(x => x.id === id); if(!o) return;
   const items = o.orderItems || o.items || [];
-  const html = `<div style="font-family:sans-serif;padding:40px;max-width:800px;margin:0 auto;color:#000;background:#fff;min-height:100vh"><div style="display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:20px;margin-bottom:20px"><div><h1 style="margin:0">НЭХЭМЖЛЭХ (INVOICE)</h1><div style="color:#666;margin-top:8px">Захиалгын дугаар: ${o.orderNumber || o.id.split('-')[0].toUpperCase()}</div><div style="color:#666;margin-top:4px">Огноо: ${new Date(o.createdAt).toLocaleDateString()}</div></div><div style="text-align:right"><img src="https://chart.googleapis.com/chart?chs=100x100&cht=qr&chl=${o.id}" style="border:1px solid #ccc;padding:4px;border-radius:4px" alt="QR Code"></div></div><div style="display:flex;justify-content:space-between;margin-bottom:30px;font-size:14px"><div><b>Худалдан авагч / Хүлээн авагч:</b><br>${o.shippingAddress?.name||'Зочин'}</div><div style="text-align:right"><b>WEBSHOP ХХК</b><br>Улаанбаатар хот<br>Утас: 7000-0000<br>И-мэйл: info@webshop.mn</div></div><table style="width:100%;border-collapse:collapse;margin-bottom:30px;font-size// PREDICTIVE INVENTORY (SUPPLIERS)
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px;max-width:800px;margin:0 auto;color:#334155;background:#f8fafc">
+    <div style="background:#fff;padding:40px;border-radius:16px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);border:1px solid #e2e8f0">
+      <div style="display:flex;justify-content:space-between;border-bottom:2px solid #e2e8f0;padding-bottom:24px;margin-bottom:32px">
+        <div><h1 style="margin:0;font-size:24px;color:#1e293b">НЭХЭМЖЛЭХ</h1><div style="color:#64748b;margin-top:8px">ID: ${esc(o.orderNumber || o.id)}</div></div>
+        <div style="text-align:right"><div style="font-weight:700;color:#4f46e5;font-size:18px">WEBSHOP</div><div style="font-size:12px;color:#64748b">${new Date(o.createdAt).toLocaleDateString()}</div></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:40px">
+        <div><div style="font-size:12px;color:#64748b;text-transform:uppercase;margin-bottom:8px">Хүлээн авагч</div><div style="font-weight:600">${esc(o.shippingAddress?.name||'Зочин')}</div><div style="font-size:14px">${esc(o.shippingAddress?.phone||'---')}</div></div>
+        <div style="text-align:right"><div style="font-size:12px;color:#64748b;text-transform:uppercase;margin-bottom:8px">Төлбөрийн төлөв</div><div style="font-weight:600;color:#16a34a">${esc(o.paymentStatus).toUpperCase()}</div></div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:40px">
+        <thead><tr style="text-align:left;color:#64748b;font-size:12px;border-bottom:1px solid #e2e8f0"><th style="padding:12px 0">БАРАА</th><th>TOO</th><th style="text-align:right">ҮНЭ</th></tr></thead>
+        <tbody>${items.map(it=>`<tr><td style="padding:12px 0;font-weight:500">${esc(it.productName)}</td><td>${it.quantity}</td><td style="text-align:right">₮${it.unitPrice.toLocaleString()}</td></tr>`).join('')}</tbody>
+      </table>
+      <div style="border-top:2px solid #e2e8f0;padding-top:20px;text-align:right"><div style="font-size:14px;color:#64748b">Нийт дүн</div><div style="font-size:28px;font-weight:800;color:#1e293b">₮${o.grandTotal.toLocaleString()}</div></div>
+    </div>
+  </body></html>`;
+  const win = window.open('','_blank'); win.document.write(html); win.document.close(); win.print();
+}
+
+// PREDICTIVE INVENTORY (SUPPLIERS)
 async function loadSup() {
   try {
     const r=await fetch(API+'/api/v1/admin/dashboard/supply-orders');
     const d=await r.json();
     if(!d.success || !Array.isArray(d.data)) return;
-    // V71 FIX: Escape all server-sourced fields to prevent XSS
-    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     if(d.data.length) {
-      document.getElementById('sobbody').innerHTML=d.data.map(o=>`<tr><td style="color:var(--dim);font-size:12px">${new Date(o.createdAt).toLocaleString()}</td><td style="font-weight:600">${esc(o.product?.name||'Тодорхойгүй')} <br><span style="color:var(--dim);font-size:12px">Код: ${esc(o.productId.slice(-6))}</span></td><td><span style="background:var(--smoke);padding:4px 8px;border-radius:4px">${Number(o.product?.inventory?.quantity||0)} ширхэг</span></td><td style="font-family:monospace;font-size:16px;font-weight:bold;color:${o.aiSuggested?'#8b5cf6':'var(--bone)'}"}>+${Number(o.quantity||0)} ширхэг</td><td style="font-size:12px;color:var(--dim);max-width:200px;line-height:1.4">${esc(o.reason||'Тодорхойгүй')}</td><td>${o.status==='DRAFT' ? `<button class="btn" style="background:#16a34a;color:#fff" onclick="approveSupplyOrder('${esc(o.id)}')">Батлах (Нөөцөд нэмэх)</button>` : `<span style="color:#10b981;font-weight:bold">✓ БАТЛАГДСАН</span>`}</td></tr>`).join('');
-    } else {
-      document.getElementById('sobbody').innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--dim);padding:40px">AI одоогоор ямар нэг бараа дуусна гэж таамаглаагүй байна.</td></tr>';
+      document.getElementById('sobbody').innerHTML=d.data.map(o=>`<tr><td style="color:var(--dim);font-size:12px">${new Date(o.createdAt).toLocaleString()}</td><td style="font-weight:600">${esc(o.product?.name||'Тодорхойгүй')}</td><td>${o.product?.inventory?.quantity||0} ш</td><td style="font-weight:bold;color:#6366f1">+${o.quantity} ш</td><td style="font-size:12px;color:var(--dim)">${esc(o.reason)}</td><td>${o.status==='DRAFT' ? `<button class="btn" style="background:#16a34a" onclick="approveSupplyOrder('${esc(o.id)}')">Батлах</button>` : `<span style="color:#10b981">✓ БАТЛАСАН</span>`}</td></tr>`).join('');
     }
-  } catch{}
+  } catch(e){}
 }
 async function approveSupplyOrder(id) {
   if(confirm('AI-ийн энэ саналыг баталгаажуулж, барааны нөөц дээр бодитоор нэмэх үү?')) {
