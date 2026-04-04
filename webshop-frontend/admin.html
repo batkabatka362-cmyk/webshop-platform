@@ -1248,7 +1248,15 @@ async function loadCus(){
 }
 function editCus(id) { const c = ALL_CUS.find(x=>x.id===id); if(c) { editingCus=id; document.getElementById('ce-fn').value=c.firstName; document.getElementById('ce-ln').value=c.lastName||''; document.getElementById('ce-em').value=c.email; document.getElementById('mo-cus-edit').classList.add('on'); document.getElementById('ce-note-input').value=''; document.getElementById('ce-wallet-amt').value=''; loadCusNotes(id); } }
 async function saveCus() { const payload = {firstName: document.getElementById('ce-fn').value, lastName: document.getElementById('ce-ln').value, email: document.getElementById('ce-em').value}; await fetch(API+'/api/v1/customers/'+editingCus, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); showT('Мэдээлэл шинэчлэгдлээ!'); loadCus(); }
-async function loadCusNotes(id) { try { const r=await fetch(API+'/api/v1/customers/'+id+'/notes'); const d=await r.json(); document.getElementById('ce-notes-list').innerHTML=d.data.map(n=>`<div style="background:var(--surface);padding:12px;border-radius:6px;border:1px solid var(--smoke)"><div style="font-size:12px;color:var(--bone);line-height:1.4">${n.details?.note||'-'}</div><div style="font-size:10px;color:var(--dim);margin-top:6px;text-align:right">${new Date(n.createdAt).toLocaleString()}</div></div>`).join(''); } catch{} }
+async function loadCusNotes(id) {
+  try {
+    const r=await fetch(API+'/api/v1/customers/'+id+'/notes'); const d=await r.json();
+    if(!Array.isArray(d.data)) return;
+    // V75 FIX: Escape note content to prevent stored XSS from admin notes
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    document.getElementById('ce-notes-list').innerHTML = d.data.map(n=>`<div style="background:var(--surface);padding:12px;border-radius:6px;border:1px solid var(--smoke)"><div style="font-size:12px;color:var(--bone);line-height:1.4">${esc(n.details?.note||'-')}</div><div style="font-size:10px;color:var(--dim);margin-top:6px;text-align:right">${new Date(n.createdAt).toLocaleString()}</div></div>`).join('') || '<div style="color:var(--dim);font-size:12px">Тэмдэглэл алга</div>';
+  } catch{}
+}
 async function saveCusNote() { const v=document.getElementById('ce-note-input').value.trim(); if(!v)return; await fetch(API+'/api/v1/customers/'+editingCus+'/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({note:v})}); document.getElementById('ce-note-input').value=''; loadCusNotes(editingCus); showT('Тэмдэглэл хадгалагдлаа'); }
 async function addWallet() {
   const raw = document.getElementById('ce-wallet-amt').value;
@@ -1265,15 +1273,61 @@ async function addWallet() {
 
 // COUPONS
 let editingCp = null;
-async function loadCp() { try{const r=await fetch(API+'/api/v1/coupons');const d=await r.json();ALL_CP=d.data;document.getElementById('cptbody').innerHTML=d.data.map(c=>`<tr><td style="font-weight:600">${c.code}</td><td>${c.discountValue}%</td><td><button class="btn-ghost" onclick="editCp('${c.id}')">Засах</button><button class="btn-ghost del-btn" onclick="delCp('${c.id}')">Устгах</button></td></tr>`).join('')}catch{}}
+async function loadCp() {
+  try {
+    const r=await fetch(API+'/api/v1/coupons'); const d=await r.json();
+    if(!d.success || !Array.isArray(d.data)) return;
+    ALL_CP = d.data;
+    // V73 FIX: Escape coupon code/id to prevent XSS
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    document.getElementById('cptbody').innerHTML = ALL_CP.map(c=>`<tr><td style="font-weight:600">${esc(c.code)}</td><td>${Number(c.discountValue||0)}%</td><td><button class="btn-ghost" onclick="editCp('${esc(c.id)}')">Засах</button><button class="btn-ghost del-btn" onclick="delCp('${esc(c.id)}')">Устгах</button></td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--dim);padding:20px">Купон алга</td></tr>';
+  } catch{}
+}
 function openCpM() { editingCp=null; document.getElementById('cp-title').textContent='Урамшуулал үүсгэх'; document.getElementById('cp-code').value=''; document.getElementById('cp-val').value=''; document.getElementById('mo-cp').classList.add('on'); }
 function editCp(id) { const c = ALL_CP.find(x=>x.id===id); if(c) { editingCp=id; document.getElementById('cp-title').textContent='Урамшуулал засах'; document.getElementById('cp-code').value=c.code; document.getElementById('cp-val').value=c.discountValue; document.getElementById('mo-cp').classList.add('on'); } }
-async function saveCp() { const payload = {code: document.getElementById('cp-code').value.trim(), discountValue: document.getElementById('cp-val').value}; if(editingCp) await fetch(API+'/api/v1/coupons/'+editingCp, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); else await fetch(API+'/api/v1/coupons', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); document.getElementById('mo-cp').classList.remove('on'); showT('Амжилттай хадгаллаа!'); loadCp(); }
-async function delCp(id) { await fetch(API+'/api/v1/coupons/'+id,{method:'DELETE'}); showT('Устгагдлаа'); loadCp(); }
+async function saveCp() {
+  const code = document.getElementById('cp-code').value.trim().toUpperCase();
+  // V74 FIX: Coerce discountValue to Number, validate range
+  const discountValue = Number(document.getElementById('cp-val').value);
+  if(!code) return showT('Код оруулна уу!');
+  if(isNaN(discountValue) || discountValue <= 0 || discountValue > 100) return showT('Хөнгөлөлт 1-100% байх ерхтэй!');
+  try {
+    const r = editingCp
+      ? await fetch(API+'/api/v1/coupons/'+editingCp, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({code, discountValue})})
+      : await fetch(API+'/api/v1/coupons', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code, discountValue})});
+    const d = await r.json();
+    if(d.success) { document.getElementById('mo-cp').classList.remove('on'); showT('Амжилттай хадгаллаа!'); loadCp(); }
+    else showT('Хадгалахд алдаа: ' + (d.message || 'Тодорхойгүй'));
+  } catch { showT('Сүлжээний алдаа'); }
+}
+async function delCp(id) {
+  if(!confirm('Устгах уу?')) return;
+  try {
+    const r = await fetch(API+'/api/v1/coupons/'+id,{method:'DELETE'});
+    const d = await r.json();
+    if(d.success) { showT('Устгагдлаа'); loadCp(); }
+    else showT('Устгахд алдаа: ' + (d.message || 'Тодорхойгүй'));
+  } catch { showT('Сүлжээний алдаа'); }
+}
 
 // MANUAL ORDER
 function openOM() { document.getElementById('mo-cus').value=''; document.getElementById('mo-price').value=''; document.getElementById('mo-order').classList.add('on'); }
-async function saveOM() { const cus=document.getElementById('mo-cus').value.trim(); const sel=document.getElementById('mo-prod'); const pid=sel.value; const ppr=document.getElementById('mo-price').value||sel.options[sel.selectedIndex].dataset.price; await fetch(API+'/api/v1/orders/admin', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customerName:cus||'Үл таних зочин', productId:pid, price:ppr})}); showT('Захиалга нэмэгдэж Нэхэмжлэх үүслээ!'); document.getElementById('mo-order').classList.remove('on'); loadOrders(); loadStats(); }
+async function saveOM() {
+  const cus = document.getElementById('mo-cus').value.trim();
+  const sel = document.getElementById('mo-prod');
+  const pid = sel.value;
+  // V76 FIX: Coerce price to Number before sending; handle server errors
+  const rawPrice = document.getElementById('mo-price').value || sel.options[sel.selectedIndex]?.dataset.price || '0';
+  const price = Number(rawPrice);
+  if(!pid) return showT('Бараа сонгоно уу!');
+  if(isNaN(price) || price < 0) return showT('Буруу үнэ оруулсан байна');
+  try {
+    const r = await fetch(API+'/api/v1/orders/admin', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customerName:cus||'Үл таних зочин', productId:pid, price})});
+    const d = await r.json();
+    if(d.success) { showT('Захиалга нэмэгдэж Нэхэмжлэх үүслээ!'); document.getElementById('mo-order').classList.remove('on'); loadOrders(); loadStats(); }
+    else showT('Захиалга үүсгэхд алдаа: ' + (d.message || 'Тодорхойгүй'));
+  } catch { showT('Сүлжээний алдаа'); }
+}
 
 // TRACKING
 function openTrackM(id, st, code) { editingTrackId = id; document.getElementById('mo-t-status').value = st; document.getElementById('mo-t-code').value = code || ''; document.getElementById('mo-track').classList.add('on'); }
@@ -1312,7 +1366,28 @@ function closeM(){ document.getElementById('mo').classList.remove('on'); }
 function updatePv(){ const v=document.getElementById('p-img').value; const pv=document.getElementById('p-pv'); if(v){pv.src=v;pv.style.display='block'}else pv.style.display='none'; }
 function editP(id){ const p=ALL_PRODS.find(x=>x.id===id); if(p){editingId=id;document.getElementById('m-title').textContent='Бараа засах';document.getElementById('p-name').value=p.name||'';document.getElementById('p-price').value=p.basePrice||'';document.getElementById('p-cost').value=p.attributes?.costPrice||'';document.getElementById('p-sale').value=p.attributes?.salePrice||'';document.getElementById('p-desc').value=p.description||'';document.getElementById('p-cat').value=p.categoryId||'';document.getElementById('p-img').value=p.media?.[0]?.url||'';updatePv();openM(true);} }
 async function autoGen(){ const n=document.getElementById('p-name').value.trim(); if(!n)return showT('НЭР үү?'); const b=document.getElementById('aibtn'); b.textContent='Бодож байна...'; try{const r=await fetch(API+'/api/v1/ai/generate-product',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})});const d=await r.json();if(d.success){document.getElementById('p-desc').value=d.data.description;document.getElementById('p-tags').value=d.data.seoTags;if(!document.getElementById('p-price').value)document.getElementById('p-price').value=d.data.pricePrediction;showT('AI зохиолоо! ✨')}}catch{} b.textContent='✨ AI Auto-Generate'; }
-async function saveP(){ const data={name:document.getElementById('p-name').value.trim(),basePrice:document.getElementById('p-price').value,costPrice:document.getElementById('p-cost').value,salePrice:document.getElementById('p-sale').value,description:document.getElementById('p-desc').value,categoryId:document.getElementById('p-cat').value||undefined,images:document.getElementById('p-img').value?[document.getElementById('p-img').value]:[]}; if(!data.name||!data.basePrice)return showT('Нэр, Үнэ!'); if(editingId)await fetch(API+'/api/v1/products/'+editingId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); else await fetch(API+'/api/v1/products',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); closeM(); loadProds(); showT('Амжилттай хадгаллаа!'); }
+async function saveP(){
+  const data={
+    name: document.getElementById('p-name').value.trim(),
+    // V77 FIX: Coerce all price fields to Numbers — prevents strings like '150000' being stored as text
+    basePrice:  Number(document.getElementById('p-price').value) || 0,
+    costPrice:  Number(document.getElementById('p-cost').value)  || 0,
+    salePrice:  Number(document.getElementById('p-sale').value)  || 0,
+    description: document.getElementById('p-desc').value,
+    categoryId: document.getElementById('p-cat').value || undefined,
+    images: document.getElementById('p-img').value ? [document.getElementById('p-img').value] : []
+  };
+  if(!data.name) return showT('Нэрээ оруулна уу!');
+  if(!data.basePrice || data.basePrice <= 0) return showT('Буруу үнэ оруулсан байна!');
+  try {
+    const r = editingId
+      ? await fetch(API+'/api/v1/products/'+editingId, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
+      : await fetch(API+'/api/v1/products',              {method:'POST', headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    const d = await r.json();
+    if(d.success) { closeM(); loadProds(); showT('Амжилттай хадгаллаа!'); }
+    else showT('Хадгалахд алдаа: ' + (d.message || 'Тодорхойгүй'));
+  } catch { showT('Сүлжээний алдаа. Хадгалагдсан эсэхийг шалгаарай.'); }
+}
 async function delP(id){ if(confirm('Устгах уу?')){await fetch(API+'/api/v1/products/'+id,{method:'DELETE'});showT('Устгагдлаа');loadProds();} }
 
 // INITIALIZATION
@@ -1345,8 +1420,10 @@ async function loadOpsMetrics() {
 async function loadOpsJobs() {
   try {
     const r=await window.fetch(API+'/api/v1/admin/ops/jobs'); const d=await r.json();
-    if(d.success && d.data.length) {
-      document.getElementById('ops-jobs').innerHTML = d.data.map(j=>`<tr><td style="font-weight:600">${j.type}</td><td><span style="background:${j.status==='completed'?'#dcfce7':'#fef08a'};color:${j.status==='completed'?'#166534':'#ca8a04'};padding:2px 6px;border-radius:4px;font-size:11px">${j.status}</span></td><td style="font-size:12px;color:var(--dim)">${j.result||'-'}</td></tr>`).join('');
+    if(d.success && Array.isArray(d.data) && d.data.length) {
+      // V78 FIX: Escape job fields to prevent XSS from background job results
+      const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      document.getElementById('ops-jobs').innerHTML = d.data.map(j=>`<tr><td style="font-weight:600">${esc(j.type)}</td><td><span style="background:${j.status==='completed'?'#dcfce7':'#fef08a'};color:${j.status==='completed'?'#166534':'#ca8a04'};padding:2px 6px;border-radius:4px;font-size:11px">${esc(j.status)}</span></td><td style="font-size:12px;color:var(--dim)">${esc(j.result||'-')}</td></tr>`).join('');
     } else { document.getElementById('ops-jobs').innerHTML='<tr><td colspan="3" style="text-align:center;color:var(--dim)">Ажил алга</td></tr>'; }
   } catch{}
 }
@@ -1354,12 +1431,23 @@ async function testHeavyJob() { await window.fetch(API+'/api/v1/admin/ops/test-j
 async function loadOpsKeys() {
   try {
     const r=await window.fetch(API+'/api/v1/admin/ops/api-keys'); const d=await r.json();
-    if(d.success && d.data.length) {
-      document.getElementById('ops-keys').innerHTML = d.data.map(k=>`<tr><td style="font-weight:600">${k.name}</td><td style="font-size:12px;font-family:monospace;color:var(--dim)">${k.key}</td><td><button class="btn-ghost del-btn" onclick="delApiKey('${k.id}')">Устгах</button></td></tr>`).join('');
+    if(d.success && Array.isArray(d.data) && d.data.length) {
+      // V79 FIX: Escape key name/value — these are stored in DB and could be tampered
+      const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+      document.getElementById('ops-keys').innerHTML = d.data.map(k=>`<tr><td style="font-weight:600">${esc(k.name)}</td><td style="font-size:12px;font-family:monospace;color:var(--dim)">${esc(k.key)}</td><td><button class="btn-ghost del-btn" onclick="delApiKey('${esc(k.id)}')">Устгах</button></td></tr>`).join('');
     } else { document.getElementById('ops-keys').innerHTML='<tr><td colspan="3" style="text-align:center;color:var(--dim)">Токен байхгүй</td></tr>'; }
   } catch{}
 }
-async function generateApiKey() { const n=document.getElementById('ops-api-name').value; if(!n) return showT('Нэр оруулна уу'); await window.fetch(API+'/api/v1/admin/ops/api-keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})}); document.getElementById('ops-api-name').value=''; showT('Амжилттай үүслээ'); loadOpsKeys(); }
+async function generateApiKey() {
+  const n=document.getElementById('ops-api-name').value.trim();
+  if(!n) return showT('Нэр оруулна уу');
+  try {
+    const r = await window.fetch(API+'/api/v1/admin/ops/api-keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})});
+    const d = await r.json();
+    if(d.success) { document.getElementById('ops-api-name').value=''; showT('Амжилттай үүслээ'); loadOpsKeys(); }
+    else showT('Үүсгэхд алдаа: ' + (d.message || 'Тодорхойгүй'));
+  } catch { showT('Сүлжээний алдаа'); }
+}
 async function delApiKey(id) { await window.fetch(API+'/api/v1/admin/ops/api-keys/'+id,{method:'DELETE'}); loadOpsKeys(); }
 
 // Boot checks
